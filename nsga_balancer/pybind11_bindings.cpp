@@ -1,0 +1,249 @@
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+#include <pybind11/functional.h>
+#include <pybind11/numpy.h>
+#include "nsga_engine.hpp"
+
+namespace py = pybind11;
+
+PYBIND11_MODULE(_core, m)
+{
+    m.doc() = "NSGA-II Balance Engine - multi-objective team balancing module";
+
+    // ==================== PlayerRoleInfo ====================
+    py::class_<PlayerRoleInfo>(m, "PlayerRoleInfo")
+        .def(py::init<>())
+        .def(py::init([](int role_id, int rating, int priority) {
+            return PlayerRoleInfo{role_id, rating, priority};
+        }), py::arg("role_id"), py::arg("rating"), py::arg("priority"))
+        .def_readwrite("role_id", &PlayerRoleInfo::role_id)
+        .def_readwrite("rating", &PlayerRoleInfo::rating)
+        .def_readwrite("priority", &PlayerRoleInfo::priority)
+        .def("__repr__", [](const PlayerRoleInfo& r) {
+            return "PlayerRoleInfo(role_id=" + std::to_string(r.role_id) + 
+                   ", rating=" + std::to_string(r.rating) + 
+                   ", priority=" + std::to_string(r.priority) + ")";
+        });
+
+    // ==================== PlayerInfo ====================
+    py::class_<PlayerInfo>(m, "PlayerInfo")
+        .def(py::init<>())
+        .def(py::init([](int member_id, const std::vector<PlayerRoleInfo>& roles) {
+            PlayerInfo p;
+            p.member_id = member_id;
+            p.roles = roles;
+            return p;
+        }), py::arg("member_id"), py::arg("roles"))
+        .def_readwrite("member_id", &PlayerInfo::member_id)
+        .def_readwrite("roles", &PlayerInfo::roles)
+        .def("can_play_role", &PlayerInfo::can_play_role, py::arg("role_id"))
+        .def("get_rating_for_role", &PlayerInfo::get_rating_for_role, py::arg("role_id"))
+        .def("get_priority_for_role", &PlayerInfo::get_priority_for_role, py::arg("role_id"))
+        .def("__repr__", [](const PlayerInfo& p) {
+            return "PlayerInfo(member_id=" + std::to_string(p.member_id) + 
+                   ", roles=[" + std::to_string(p.roles.size()) + " roles])";
+        });
+
+    // ==================== RoleSettings ====================
+    py::class_<RoleSettings>(m, "RoleSettings")
+        .def(py::init<>())
+        .def(py::init([](int count_in_team) {
+            RoleSettings s;
+            s.count_in_team = count_in_team;
+            return s;
+        }), py::arg("count_in_team") = 1)
+        .def_readwrite("count_in_team", &RoleSettings::count_in_team)
+        .def("__repr__", [](const RoleSettings& s) {
+            return "RoleSettings(count_in_team=" + std::to_string(s.count_in_team) + ")";
+        });
+
+    // ==================== NSGASettings ====================
+    py::class_<NSGASettings>(m, "NSGASettings")
+        .def(py::init<>())
+        .def_readwrite("population_size", &NSGASettings::population_size)
+        .def_readwrite("generations", &NSGASettings::generations)
+        .def_readwrite("num_pareto_solutions", &NSGASettings::num_pareto_solutions)
+        .def_readwrite("weight_team_variance", &NSGASettings::weight_team_variance)
+        .def_readwrite("weight_role_variance", &NSGASettings::weight_role_variance)
+        .def_readwrite("penalty_invalid_role", &NSGASettings::penalty_invalid_role)
+        .def_readwrite("penalty_prio_1", &NSGASettings::penalty_prio_1)
+        .def_readwrite("penalty_prio_2", &NSGASettings::penalty_prio_2)
+        .def_readwrite("penalty_prio_3", &NSGASettings::penalty_prio_3)
+        .def("__repr__", [](const NSGASettings& s) {
+            return "NSGASettings(pop=" + std::to_string(s.population_size) +
+                   ", gens=" + std::to_string(s.generations) +
+                   ", pareto=" + std::to_string(s.num_pareto_solutions) + ")";
+        });
+
+    // ==================== EngineSettings ====================
+    py::class_<EngineSettings>(m, "EngineSettings")
+        .def(py::init<>())
+        .def_readwrite("num_workers", &EngineSettings::num_workers)
+        .def_readwrite("fallback_workers", &EngineSettings::fallback_workers)
+        .def_readwrite("seed", &EngineSettings::seed)
+        .def("__repr__", [](const EngineSettings& s) {
+            return "EngineSettings(num_workers=" + std::to_string(s.num_workers) +
+                   ", seed=" + std::to_string(s.seed) + ")";
+        });
+
+    // ==================== AssignedPlayer ====================
+    py::class_<AssignedPlayer>(m, "AssignedPlayer")
+        .def(py::init<>())
+        .def(py::init([](int member_id, int role_id, int rating, int priority) {
+            return AssignedPlayer{member_id, role_id, rating, priority};
+        }), py::arg("member_id"), py::arg("role_id"), py::arg("rating"), py::arg("priority"))
+        .def_readwrite("member_id", &AssignedPlayer::member_id)
+        .def_readwrite("role_id", &AssignedPlayer::role_id)
+        .def_readwrite("rating", &AssignedPlayer::rating)
+        .def_readwrite("priority", &AssignedPlayer::priority)
+        .def("__repr__", [](const AssignedPlayer& a) {
+            return "AssignedPlayer(member_id=" + std::to_string(a.member_id) +
+                   ", role_id=" + std::to_string(a.role_id) +
+                   ", rating=" + std::to_string(a.rating) +
+                   ", priority=" + std::to_string(a.priority) + ")";
+        });
+
+    // ==================== TeamResult ====================
+    py::class_<TeamResult>(m, "TeamResult")
+        .def(py::init<>())
+        .def(py::init([](int team_id, const std::vector<AssignedPlayer>& players, int total_rating) {
+            TeamResult t;
+            t.team_id = team_id;
+            t.players = players;
+            t.total_rating = total_rating;
+            return t;
+        }), py::arg("team_id"), py::arg("players"), py::arg("total_rating"))
+        .def_readwrite("team_id", &TeamResult::team_id)
+        .def_readwrite("players", &TeamResult::players)
+        .def_readwrite("total_rating", &TeamResult::total_rating)
+        .def("__repr__", [](const TeamResult& t) {
+            return "TeamResult(team_id=" + std::to_string(t.team_id) +
+                   ", players=" + std::to_string(t.players.size()) +
+                   ", total_rating=" + std::to_string(t.total_rating) + ")";
+        });
+
+    // ==================== DraftSolution ====================
+    py::class_<DraftSolution>(m, "DraftSolution")
+        .def(py::init<>())
+        .def_readwrite("solution_id", &DraftSolution::solution_id)
+        .def_readwrite("fitness_balance", &DraftSolution::fitness_balance)
+        .def_readwrite("fitness_priority", &DraftSolution::fitness_priority)
+        .def_readwrite("teams", &DraftSolution::teams)
+        .def("__repr__", [](const DraftSolution& s) {
+            return "DraftSolution(id=" + std::to_string(s.solution_id) +
+                   ", balance=" + std::to_string(s.fitness_balance) +
+                   ", priority=" + std::to_string(s.fitness_priority) +
+                   ", teams=" + std::to_string(s.teams.size()) + ")";
+        });
+
+    // ==================== NSGA2Engine ====================
+    py::class_<NSGA2Engine>(m, "NSGA2Engine")
+        .def(py::init<const NSGASettings&,
+                      const std::vector<int>&,
+                      const std::unordered_map<int, RoleSettings>&,
+                      int,
+                      const EngineSettings&>(),
+             py::arg("nsga_settings"),
+             py::arg("role_ids"),
+             py::arg("role_settings"),
+             py::arg("players_in_team"),
+             py::arg("engine_settings") = EngineSettings{},
+             R"doc(
+                Create a new NSGA2Engine instance.
+                
+                Args:
+                    nsga_settings: NSGASettings for genetic algorithm parameters
+                    role_ids: List of role IDs
+                    role_settings: Dict mapping role_id to RoleSettings
+                    players_in_team: Number of players per team
+                    engine_settings: EngineSettings for threading and seed
+             )doc")
+        .def("run", &NSGA2Engine::run,
+             py::arg("players"),
+             py::call_guard<py::gil_scoped_release>(),
+             R"doc(
+                Run NSGA-II optimization.
+                
+                Args:
+                    players: List of PlayerInfo objects
+                
+                Returns:
+                    List of DraftSolution from Pareto front
+             )doc")
+        .def_property_readonly("nsga_settings", &NSGA2Engine::nsga_settings)
+        .def_property_readonly("engine_settings", &NSGA2Engine::engine_settings)
+        .def("__repr__", [](const NSGA2Engine& e) {
+            return "NSGA2Engine(pop=" + std::to_string(e.nsga_settings().population_size) +
+                   ", gens=" + std::to_string(e.nsga_settings().generations) + ")";
+        });
+
+    // ==================== Module-level convenience functions ====================
+    m.def("create_player",
+        [](int member_id, const std::vector<std::tuple<int, int, int>>& roles) {
+            PlayerInfo p;
+            p.member_id = member_id;
+            for (const auto& [role_id, rating, priority] : roles) {
+                p.roles.push_back(PlayerRoleInfo{role_id, rating, priority});
+            }
+            return p;
+        },
+        py::arg("member_id"),
+        py::arg("roles"),
+        R"doc(
+            Create a PlayerInfo from tuple data.
+            
+            Args:
+                member_id: Player's unique ID
+                roles: List of (role_id, rating, priority) tuples
+        )doc");
+
+    m.def("create_nsga_settings",
+        [](int population_size, int generations, int num_pareto_solutions,
+           float weight_team_variance, float weight_role_variance,
+           float penalty_invalid_role, float penalty_prio_1,
+           float penalty_prio_2, float penalty_prio_3) {
+            NSGASettings s;
+            s.population_size = population_size;
+            s.generations = generations;
+            s.num_pareto_solutions = num_pareto_solutions;
+            s.weight_team_variance = weight_team_variance;
+            s.weight_role_variance = weight_role_variance;
+            s.penalty_invalid_role = penalty_invalid_role;
+            s.penalty_prio_1 = penalty_prio_1;
+            s.penalty_prio_2 = penalty_prio_2;
+            s.penalty_prio_3 = penalty_prio_3;
+            return s;
+        },
+        py::arg("population_size") = 200,
+        py::arg("generations") = 1000,
+        py::arg("num_pareto_solutions") = 50,
+        py::arg("weight_team_variance") = 1.0f,
+        py::arg("weight_role_variance") = 0.5f,
+        py::arg("penalty_invalid_role") = 10000.0f,
+        py::arg("penalty_prio_1") = 10.0f,
+        py::arg("penalty_prio_2") = 3.0f,
+        py::arg("penalty_prio_3") = 0.0f,
+        "Create NSGASettings with all parameters");
+
+    m.def("create_role_settings",
+        [](int count_in_team) {
+            RoleSettings s;
+            s.count_in_team = count_in_team;
+            return s;
+        },
+        py::arg("count_in_team") = 1,
+        "Create RoleSettings with count_in_team");
+
+    m.def("create_engine_settings",
+        [](int num_workers, int fallback_workers, int seed) {
+            EngineSettings s;
+            s.num_workers = num_workers;
+            s.fallback_workers = fallback_workers;
+            s.seed = seed;
+            return s;
+        },
+        py::arg("num_workers") = 0,
+        py::arg("fallback_workers") = 4,
+        py::arg("seed") = 42,
+        "Create EngineSettings with all parameters");
+}
