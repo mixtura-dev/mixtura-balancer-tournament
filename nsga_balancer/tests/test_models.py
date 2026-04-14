@@ -9,6 +9,7 @@ from nsga_balancer.models import (
     PlayerRole,
     Player,
     RoleSettings,
+    SubroleSettings,
     MathSettings,
     BalanceSettings,
     BalanceRequest,
@@ -19,9 +20,10 @@ from nsga_balancer.models import (
 
 
 def test_player_role():
-    role = PlayerRole(rating=2500, priority=1)
+    role = PlayerRole(rating=2500, priority=1, subrole_ids=[])
     assert role.rating == 2500
     assert role.priority == 1
+    assert role.subrole_ids == []
 
 
 def test_player_with_roles():
@@ -35,8 +37,9 @@ def test_player_with_roles():
 
 
 def test_role_settings():
-    settings = RoleSettings(count_in_team=2)
+    settings = RoleSettings(count_in_team=2, subroles={uuid.uuid4(): SubroleSettings(capacity=1)})
     assert settings.count_in_team == 2
+    assert len(settings.subroles) == 1
 
 
 def test_math_settings_defaults():

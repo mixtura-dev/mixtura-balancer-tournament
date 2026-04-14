@@ -13,16 +13,23 @@ PYBIND11_MODULE(_core, m)
     // ==================== PlayerRoleInfo ====================
     py::class_<PlayerRoleInfo>(m, "PlayerRoleInfo")
         .def(py::init<>())
-        .def(py::init([](int role_id, int rating, int priority) {
-            return PlayerRoleInfo{role_id, rating, priority};
-        }), py::arg("role_id"), py::arg("rating"), py::arg("priority"))
+        .def(py::init([](int role_id, int rating, int priority, const std::vector<int>& subrole_ids) {
+            return PlayerRoleInfo{role_id, rating, priority, subrole_ids};
+        }),
+            py::arg("role_id"),
+            py::arg("rating"),
+            py::arg("priority"),
+            py::arg("subrole_ids") = std::vector<int>{}
+        )
         .def_readwrite("role_id", &PlayerRoleInfo::role_id)
         .def_readwrite("rating", &PlayerRoleInfo::rating)
         .def_readwrite("priority", &PlayerRoleInfo::priority)
+        .def_readwrite("subrole_ids", &PlayerRoleInfo::subrole_ids)
         .def("__repr__", [](const PlayerRoleInfo& r) {
             return "PlayerRoleInfo(role_id=" + std::to_string(r.role_id) + 
                    ", rating=" + std::to_string(r.rating) + 
-                   ", priority=" + std::to_string(r.priority) + ")";
+                   ", priority=" + std::to_string(r.priority) +
+                   ", subroles=" + std::to_string(r.subrole_ids.size()) + ")";
         });
 
     // ==================== PlayerInfo ====================
@@ -47,14 +54,17 @@ PYBIND11_MODULE(_core, m)
     // ==================== RoleSettings ====================
     py::class_<RoleSettings>(m, "RoleSettings")
         .def(py::init<>())
-        .def(py::init([](int count_in_team) {
+        .def(py::init([](int count_in_team, const std::unordered_map<int, int>& subrole_capacities) {
             RoleSettings s;
             s.count_in_team = count_in_team;
+            s.subrole_capacities = subrole_capacities;
             return s;
-        }), py::arg("count_in_team") = 1)
+        }), py::arg("count_in_team") = 1, py::arg("subrole_capacities") = std::unordered_map<int, int>{})
         .def_readwrite("count_in_team", &RoleSettings::count_in_team)
+        .def_readwrite("subrole_capacities", &RoleSettings::subrole_capacities)
         .def("__repr__", [](const RoleSettings& s) {
-            return "RoleSettings(count_in_team=" + std::to_string(s.count_in_team) + ")";
+            return "RoleSettings(count_in_team=" + std::to_string(s.count_in_team)
+                + ", subroles=" + std::to_string(s.subrole_capacities.size()) + ")";
         });
 
     // ==================== NSGASettings ====================
@@ -128,11 +138,13 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("solution_id", &DraftSolution::solution_id)
         .def_readwrite("fitness_balance", &DraftSolution::fitness_balance)
         .def_readwrite("fitness_priority", &DraftSolution::fitness_priority)
+        .def_readwrite("fitness_subrole", &DraftSolution::fitness_subrole)
         .def_readwrite("teams", &DraftSolution::teams)
         .def("__repr__", [](const DraftSolution& s) {
             return "DraftSolution(id=" + std::to_string(s.solution_id) +
                    ", balance=" + std::to_string(s.fitness_balance) +
                    ", priority=" + std::to_string(s.fitness_priority) +
+                   ", subrole=" + std::to_string(s.fitness_subrole) +
                    ", teams=" + std::to_string(s.teams.size()) + ")";
         });
 
@@ -179,11 +191,11 @@ PYBIND11_MODULE(_core, m)
 
     // ==================== Module-level convenience functions ====================
     m.def("create_player",
-        [](int member_id, const std::vector<std::tuple<int, int, int>>& roles) {
+        [](int member_id, const std::vector<std::tuple<int, int, int, std::vector<int>>>& roles) {
             PlayerInfo p;
             p.member_id = member_id;
-            for (const auto& [role_id, rating, priority] : roles) {
-                p.roles.push_back(PlayerRoleInfo{role_id, rating, priority});
+            for (const auto& [role_id, rating, priority, subrole_ids] : roles) {
+                p.roles.push_back(PlayerRoleInfo{role_id, rating, priority, subrole_ids});
             }
             return p;
         },
@@ -194,7 +206,7 @@ PYBIND11_MODULE(_core, m)
             
             Args:
                 member_id: Player's unique ID
-                roles: List of (role_id, rating, priority) tuples
+            roles: List of (role_id, rating, priority, subrole_ids) tuples
         )doc");
 
     m.def("create_nsga_settings",
@@ -226,13 +238,15 @@ PYBIND11_MODULE(_core, m)
         "Create NSGASettings with all parameters");
 
     m.def("create_role_settings",
-        [](int count_in_team) {
+        [](int count_in_team, const std::unordered_map<int, int>& subrole_capacities) {
             RoleSettings s;
             s.count_in_team = count_in_team;
+            s.subrole_capacities = subrole_capacities;
             return s;
         },
         py::arg("count_in_team") = 1,
-        "Create RoleSettings with count_in_team");
+        py::arg("subrole_capacities") = std::unordered_map<int, int>{},
+        "Create RoleSettings with count_in_team and subroles");
 
     m.def("create_engine_settings",
         [](int num_workers, int fallback_workers, int seed) {

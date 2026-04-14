@@ -7,13 +7,13 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from typing import Literal
 
 
 @dataclass
 class PlayerRole:
     priority: int
     rating: int
+    subrole_ids: list[uuid.UUID] | None = None
 
 
 @dataclass
@@ -23,8 +23,14 @@ class Player:
 
 
 @dataclass
+class SubroleSettings:
+    capacity: int = 1
+
+
+@dataclass
 class RoleSettings:
     count_in_team: int
+    subroles: dict[uuid.UUID, SubroleSettings] = field(default_factory=dict)
 
 
 @dataclass
@@ -80,6 +86,7 @@ class QualitySettings:
     fairness_coef: float = 3.0
     role_fairness_coef: float = 1.0
     role_priority_coef: float = 80.0
+    subrole_penalty_coef: float = 40.0
     role_priority_imbalance_coef: float = 0.2
     fairness_power_coef: float = 2.0
     uniformity_power_coef: float = 2.0
@@ -92,10 +99,18 @@ class QualityMetrics:
     dp_role_fairness: float
     vq_uniformity: float
     role_priority_points: float
+    fitness_subrole: float = 0.0
+    role_subrole_penalty: float = 0.0
 
     @property
     def evaluation(self) -> float:
-        return self.dp_fairness + self.dp_role_fairness + self.vq_uniformity + self.role_priority_points
+        return (
+            self.dp_fairness
+            + self.dp_role_fairness
+            + self.vq_uniformity
+            + self.role_priority_points
+            + self.role_subrole_penalty
+        )
 
 
 @dataclass
@@ -118,6 +133,7 @@ class DraftSolution:
     solution_id: int
     fitness_balance: float
     fitness_priority: float
+    fitness_subrole: float = 0.0
     quality: QualityMetrics | None = None
     teams: list[Team] = field(default_factory=list)
 
@@ -125,7 +141,7 @@ class DraftSolution:
     def evaluation(self) -> float:
         if self.quality is not None:
             return self.quality.evaluation
-        return self.fitness_balance + self.fitness_priority
+        return self.fitness_balance + self.fitness_priority + self.fitness_subrole
 
 
 __all__ = [
@@ -141,5 +157,6 @@ __all__ = [
     "QualityMetrics",
     "QualitySettings",
     "RoleSettings",
+    "SubroleSettings",
     "Team",
 ]

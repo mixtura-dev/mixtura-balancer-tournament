@@ -9,11 +9,12 @@ class PlayerRoleInfo:
     role_id: int
     rating: int
     priority: int
+    subrole_ids: list[int]
 
     @overload
     def __init__(self) -> None: ...
     @overload
-    def __init__(self, role_id: int, rating: int, priority: int) -> None: ...
+    def __init__(self, role_id: int, rating: int, priority: int, subrole_ids: list[int] = ...) -> None: ...
     def __repr__(self) -> str: ...
 
 class PlayerInfo:
@@ -31,11 +32,12 @@ class PlayerInfo:
 
 class RoleSettings:
     count_in_team: int
+    subrole_capacities: dict[int, int]
 
     @overload
     def __init__(self) -> None: ...
     @overload
-    def __init__(self, count_in_team: int) -> None: ...
+    def __init__(self, count_in_team: int, subrole_capacities: dict[int, int] = ...) -> None: ...
     def __repr__(self) -> str: ...
 
 class NSGASettings:
@@ -87,6 +89,7 @@ class DraftSolution:
     solution_id: int
     fitness_balance: float
     fitness_priority: float
+    fitness_subrole: float
     teams: list[TeamResult]
 
     def __init__(self) -> None: ...
@@ -122,7 +125,7 @@ class NSGA2Engine:
 
     def __repr__(self) -> str: ...
 
-def create_player(member_id: int, roles: list[tuple[int, int, int]]) -> PlayerInfo:
+def create_player(member_id: int, roles: list[tuple[int, int, int, list[int]]]) -> PlayerInfo:
     """
     Create a PlayerInfo from tuple data.
     """
@@ -144,7 +147,10 @@ def create_nsga_settings(
     """
     ...
 
-def create_role_settings(count_in_team: int = 1) -> RoleSettings:
+def create_role_settings(
+    count_in_team: int = 1,
+    subrole_capacities: dict[int, int] = ...,
+) -> RoleSettings:
     """
     Create RoleSettings with count_in_team.
     """

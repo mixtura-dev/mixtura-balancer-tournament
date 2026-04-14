@@ -6,8 +6,6 @@ NSGA Balancer wrapper for C++ bindings.
 from __future__ import annotations
 
 import uuid
-from concurrent.futures import ThreadPoolExecutor
-from typing import Any
 
 from . import _core
 from .models import (
@@ -54,9 +52,20 @@ class NSGA2Balancer:
         self.players_in_team = request.balance_settings.players_in_team
 
         self._role_mapper = UUIDMapper()
+        self._subrole_mapper = UUIDMapper()
         self._player_uuids = [p.member_id for p in request.players]
         self._role_uuids = list(request.balance_settings.roles.keys())
         self._cpp_role_ids = self._role_mapper.register_all(self._role_uuids)
+        self._role_subroles: dict[uuid.UUID, list[uuid.UUID]] = {
+            role_uuid: list(role_settings.subroles.keys())
+            for role_uuid, role_settings in request.balance_settings.roles.items()
+        }
+
+        all_subroles: list[uuid.UUID] = []
+        for subroles in self._role_subroles.values():
+            all_subroles.extend(subroles)
+        unique_subroles = list(dict.fromkeys(all_subroles))
+        self._subrole_mapper.register_all(unique_subroles)
 
         cpp_nsga_settings = self._convert_nsga_settings(self.settings)
         cpp_engine_settings = _core.create_engine_settings(0, 4, 42)
@@ -88,7 +97,11 @@ class NSGA2Balancer:
     ) -> dict[int, _core.RoleSettings]:
         return {
             self._role_mapper.to_int(role_uuid): _core.create_role_settings(
-                role_settings.count_in_team
+                role_settings.count_in_team,
+                {
+                    self._subrole_mapper.to_int(subrole_uuid): subrole_settings.capacity
+                    for subrole_uuid, subrole_settings in role_settings.subroles.items()
+                },
             )
             for role_uuid, role_settings in roles.items()
         }
@@ -102,7 +115,17 @@ class NSGA2Balancer:
             cpp_roles = []
             for role_uuid, role_info in player.roles.items():
                 role_int_id = self._role_mapper.to_int(role_uuid)
-                cpp_roles.append((role_int_id, role_info.rating, role_info.priority))
+                role_subroles = self._role_subroles.get(role_uuid, [])
+                if role_subroles:
+                    if role_info.subrole_ids:
+                        effective_subroles = list(dict.fromkeys(role_info.subrole_ids))
+                    else:
+                        effective_subroles = role_subroles
+                    cpp_subroles = [self._subrole_mapper.to_int(subrole_id) for subrole_id in effective_subroles]
+                else:
+                    cpp_subroles = []
+
+                cpp_roles.append((role_int_id, role_info.rating, role_info.priority, cpp_subroles))
             cpp_players.append(_core.create_player(member_int_id, cpp_roles))
         return cpp_players
 
@@ -135,6 +158,7 @@ class NSGA2Balancer:
                     solution_id=cpp_sol.solution_id,
                     fitness_balance=cpp_sol.fitness_balance,
                     fitness_priority=cpp_sol.fitness_priority,
+                    fitness_subrole=cpp_sol.fitness_subrole,
                     teams=teams,
                 )
             )

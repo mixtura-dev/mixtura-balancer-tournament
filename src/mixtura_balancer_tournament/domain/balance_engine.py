@@ -22,6 +22,9 @@ from nsga_balancer.models import QualitySettings
 from nsga_balancer.models import (
     RoleSettings as NSGARoleSettings,
 )
+from nsga_balancer.models import (
+    SubroleSettings as NSGASubroleSettings,
+)
 
 from nsga_balancer import balance_teams_nsga, evaluate_solutions
 
@@ -92,6 +95,14 @@ class AsyncBalanceEngine:
                 role_priority_points=sol.quality.role_priority_points
                 if sol.quality
                 else 0.0,
+                fitness_balance=sol.fitness_balance if sol.quality else 0.0,
+                fitness_priority=sol.fitness_priority if sol.quality else 0.0,
+                fitness_subrole=sol.fitness_subrole
+                if sol.quality
+                else 0.0,
+                role_subrole_penalty=sol.quality.role_subrole_penalty
+                if sol.quality
+                else 0.0,
                 evaluation=sol.evaluation,
             )
 
@@ -100,8 +111,6 @@ class AsyncBalanceEngine:
                     id=uuid4(),
                     quality=quality,
                     teams=teams,
-                    fitness_balance=sol.fitness_balance,
-                    fitness_priority=sol.fitness_priority,
                 )
             )
 
@@ -114,19 +123,37 @@ class AsyncBalanceEngine:
         )
 
     def _convert_request(self, request: BalanceRequest) -> NSGABalanceRequest:
+        role_subrole_ids = {
+            role_id: list(settings.subroles.keys())
+            for role_id, settings in request.balance_settings.roles.items()
+        }
+
         players = []
         for p in request.players:
-            roles = {
-                role_id: NSGAPlayerRole(
+            roles = {}
+            for role_id, role_info in p.roles.items():
+                role_subroles = role_subrole_ids.get(role_id, [])
+                if role_subroles and not role_info.subrole_ids:
+                    effective_subroles = role_subroles
+                else:
+                    effective_subroles = role_info.subrole_ids
+
+                roles[role_id] = NSGAPlayerRole(
                     priority=role_info.priority,
                     rating=role_info.rating,
+                    subrole_ids=effective_subroles,
                 )
-                for role_id, role_info in p.roles.items()
-            }
+
             players.append(NSGAPlayer(member_id=p.member_id, roles=roles))
 
         roles_settings = {
-            role_id: NSGARoleSettings(count_in_team=settings.count_in_team)
+            role_id: NSGARoleSettings(
+                count_in_team=settings.count_in_team,
+                subroles={
+                    subrole_id: NSGASubroleSettings(capacity=subrole_settings.capacity)
+                    for subrole_id, subrole_settings in settings.subroles.items()
+                },
+            )
             for role_id, settings in request.balance_settings.roles.items()
         }
 
@@ -159,6 +186,7 @@ class AsyncBalanceEngine:
             fairness_coef=math_settings.fairness_coef,
             role_fairness_coef=math_settings.role_fairness_coef,
             role_priority_coef=math_settings.role_priority_coef,
+            subrole_penalty_coef=math_settings.subrole_penalty_coef,
             role_priority_imbalance_coef=math_settings.role_priority_imbalance_coef,
             fairness_power_coef=math_settings.fairness_power_coef,
             uniformity_power_coef=math_settings.uniformity_power_coef,

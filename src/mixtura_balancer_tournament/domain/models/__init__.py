@@ -6,6 +6,7 @@ from .balance_request import (
     Player,
     PlayerRole,
     RoleSettings,
+    SubroleSettings,
 )
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "Player",
     "PlayerRole",
     "RoleSettings",
+    "SubroleSettings",
 ]

@@ -4,18 +4,30 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class PlayerRole(BaseModel):
-    priority: int = Field(ge=0)
-    rating: int = Field(ge=0)
+    priority: int = Field(ge=0, description="Role priority for the player.")
+    rating: int = Field(ge=0, description="Role rating for the player.")
+    subrole_ids: list[UUID] | None = Field(
+        default=None,
+        description="Player subroles for this role. Empty or null means all role subroles.",
+    )
 
 
 class Player(BaseModel):
-    member_id: UUID
-    roles: dict[UUID, PlayerRole]
+    member_id: UUID = Field(description="Unique player identifier.")
+    roles: dict[UUID, PlayerRole] = Field(description="Player role settings: role UUID -> role data.")
+
+
+class SubroleSettings(BaseModel):
+    capacity: int = Field(default=1, ge=0, description="Maximum preferred count for this subrole in a team.")
 
 
 class RoleSettings(BaseModel):
-    original_game_role: UUID = Field(description="Оригинальная роль в игре")
-    count_in_team: int = Field(ge=0, description="Количество игроков этой роли в команде")
+    original_game_role: UUID = Field(description="Original game role identifier.")
+    count_in_team: int = Field(ge=0, description="Number of players with this role in a team.")
+    subroles: dict[UUID, SubroleSettings] = Field(
+        default_factory=dict,
+        description="Subrole settings for this role: subrole UUID -> settings.",
+    )
 
     @property
     def min_in_team(self) -> int:
@@ -34,36 +46,35 @@ class RoleSettings(BaseModel):
             if "min_in_team" in data:
                 data.pop("min_in_team", None)
         return data
-
-
 class MathSettings(BaseModel):
-    fairness_coef: float = Field(default=3.0, description="Вес fairness")
-    role_fairness_coef: float = Field(default=1.0, description="Вес role fairness")
-    role_priority_coef: float = Field(default=80.0, description="Вес role priority")
+    fairness_coef: float = Field(default=3.0, description="Weight for fairness metric.")
+    role_fairness_coef: float = Field(default=1.0, description="Weight for role fairness metric.")
+    role_priority_coef: float = Field(default=80.0, description="Weight for role priority metric.")
+    subrole_penalty_coef: float = Field(default=40.0, ge=0, description="Weight for subrole duplicate penalty metric.")
     role_priority_imbalance_coef: float = Field(
-        default=0.2, ge=0, description="Вес штрафа за дисбаланс приоритетов"
+        default=0.2, ge=0, description="Weight of the role-priority imbalance penalty."
     )
-    fairness_power_coef: float = Field(default=2.0, ge=1, description="Степень для fairness")
-    uniformity_power_coef: float = Field(default=2.0, ge=1, description="Степень для uniformity")
-    role_priority_imbalance_threshold: int = Field(default=1, ge=0, description="Порог дисбаланса приоритетов")
+    fairness_power_coef: float = Field(default=2.0, ge=1, description="Power coefficient for fairness calculation.")
+    uniformity_power_coef: float = Field(default=2.0, ge=1, description="Power coefficient for uniformity calculation.")
+    role_priority_imbalance_threshold: int = Field(default=1, ge=0, description="Threshold for role-priority imbalance penalty.")
     
-    population_size: int = Field(default=200, ge=1, description="Размер популяции NSGA-II")
-    generations: int = Field(default=1000, ge=1, description="Количество поколений NSGA-II")
-    num_pareto_solutions: int = Field(default=50, ge=1, description="Количество решений из Парето-фронта")
-    weight_team_variance: float = Field(default=1.0, description="Вес дисперсии команд")
-    weight_role_variance: float = Field(default=0.5, description="Вес дисперсии ролей")
-    penalty_invalid_role: float = Field(default=10000.0, description="Штраф за невалидную роль")
-    penalty_prio_1: float = Field(default=10.0, description="Штраф за приоритет 1")
-    penalty_prio_2: float = Field(default=3.0, description="Штраф за приоритет 2")
-    penalty_prio_3: float = Field(default=0.0, description="Штраф за приоритет 3")
+    population_size: int = Field(default=200, ge=1, description="NSGA-II population size.")
+    generations: int = Field(default=1000, ge=1, description="NSGA-II generations count.")
+    num_pareto_solutions: int = Field(default=50, ge=1, description="Number of selected solutions from the Pareto front.")
+    weight_team_variance: float = Field(default=1.0, description="Weight of team variance in balance objective.")
+    weight_role_variance: float = Field(default=0.7, description="Weight of role variance in balance objective.")
+    penalty_invalid_role: float = Field(default=10000.0, description="Penalty for assigning an invalid role.")
+    penalty_prio_1: float = Field(default=10.0, description="Penalty for priority level 1.")
+    penalty_prio_2: float = Field(default=3.0, description="Penalty for priority level 2.")
+    penalty_prio_3: float = Field(default=0.0, description="Penalty for priority level 3.")
 
 
 class BalanceSettings(BaseModel):
-    players_in_team: int = Field(ge=1, description="Количество игроков в команде")
+    players_in_team: int = Field(ge=1, description="Number of players in one team.")
     roles: dict[UUID, RoleSettings] = Field(
-        default={}, description="Настойки ролей: UUID роли -> настройки"
+        default_factory=dict, description="Role settings: role UUID -> role settings."
     )
-    math: MathSettings = Field(default_factory=MathSettings, description="Математические настройки")
+    math: MathSettings = Field(default_factory=MathSettings, description="Math and optimization settings.")
 
     @property
     def max_in_team(self) -> int:
@@ -88,17 +99,36 @@ class BalanceSettings(BaseModel):
 
 
 class BalanceRequest(BaseModel):
-    draft_id: UUID
-    players: list[Player]
-    balance_settings: BalanceSettings
+    draft_id: UUID = Field(description="Draft identifier for the balance request.")
+    players: list[Player] = Field(description="Players included in this draft.")
+    balance_settings: BalanceSettings = Field(description="Global balancing settings.")
 
     @model_validator(mode="after")
     def validate_players_roles(self) -> "BalanceRequest":
         role_ids = set(self.balance_settings.roles.keys())
         for player in self.players:
-            for role_id in player.roles.keys():
+            for role_id, role_info in player.roles.items():
                 if role_id not in role_ids:
                     raise ValueError(f"Player {player.member_id} has undefined role {role_id}")
+
+                configured_subroles = set(self.balance_settings.roles[role_id].subroles.keys())
+                if not configured_subroles:
+                    if role_info.subrole_ids:
+                        raise ValueError(
+                            f"Player {player.member_id} has subroles for role {role_id}, "
+                            "but this role has no configured subroles"
+                        )
+                    continue
+
+                if not role_info.subrole_ids:
+                    continue
+
+                undefined_subroles = set(role_info.subrole_ids) - configured_subroles
+                if undefined_subroles:
+                    undefined_repr = ", ".join(str(subrole) for subrole in sorted(undefined_subroles, key=str))
+                    raise ValueError(
+                        f"Player {player.member_id} has undefined subroles for role {role_id}: {undefined_repr}"
+                    )
         return self
 
     @model_validator(mode="after")

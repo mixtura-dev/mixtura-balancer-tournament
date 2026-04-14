@@ -12,6 +12,7 @@
 #include <mutex>
 #include <set>
 #include <limits>
+#include <array>
 
 // ==================== Data Structures ====================
 
@@ -19,6 +20,7 @@ struct PlayerRoleInfo {
     int role_id;
     int rating;
     int priority;
+    std::vector<int> subrole_ids;
 };
 
 struct PlayerInfo {
@@ -45,10 +47,20 @@ struct PlayerInfo {
         }
         return 0;
     }
+
+    const std::vector<int>* get_subroles_for_role(int role_id) const {
+        for (const auto& r : roles) {
+            if (r.role_id == role_id) {
+                return &r.subrole_ids;
+            }
+        }
+        return nullptr;
+    }
 };
 
 struct RoleSettings {
     int count_in_team = 1;
+    std::unordered_map<int, int> subrole_capacities;
 };
 
 struct NSGASettings {
@@ -88,6 +100,7 @@ struct DraftSolution {
     int solution_id;
     float fitness_balance;
     float fitness_priority;
+    float fitness_subrole;
     std::vector<TeamResult> teams;
 };
 
@@ -135,16 +148,16 @@ private:
 
     std::vector<int> generate_individual();
 
-    std::vector<std::array<float, 2>> evaluate_population(
+    std::vector<std::array<float, 3>> evaluate_population(
         const std::vector<std::vector<int>>& population
     );
 
     std::vector<std::vector<int>> fast_non_dominated_sort(
-        const std::vector<std::array<float, 2>>& objectives
+        const std::vector<std::array<float, 3>>& objectives
     );
 
     std::vector<float> calculate_crowding_distance(
-        const std::vector<std::array<float, 2>>& objectives,
+        const std::vector<std::array<float, 3>>& objectives,
         const std::vector<std::vector<int>>& fronts
     );
 
@@ -152,15 +165,27 @@ private:
         int num_select,
         const std::vector<int>& ranks,
         const std::vector<float>& distances,
-        const std::vector<std::array<float, 2>>& objectives
+        const std::vector<std::array<float, 3>>& objectives
     );
 
     std::vector<int> mutate(const std::vector<int>& parent);
 
     std::vector<DraftSolution> decode_results(
         const std::vector<std::vector<int>>& chroms,
-        const std::vector<std::array<float, 2>>& objs
+        const std::vector<std::array<float, 3>>& objs
     );
+
+    int compute_subrole_penalty_for_team_role(
+        const std::vector<int>& chrom,
+        int team_idx,
+        int role_idx
+    ) const;
+
+    std::vector<std::vector<int>> role_slot_indices_;
+    std::vector<std::vector<int>> role_subrole_ids_;
+    std::vector<std::vector<int>> role_subrole_capacities_;
+    std::vector<std::unordered_map<int, int>> role_subrole_index_;
+    std::vector<std::vector<std::vector<int>>> S_;
 };
 
 #endif

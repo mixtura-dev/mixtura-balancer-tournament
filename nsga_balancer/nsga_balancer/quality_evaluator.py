@@ -199,6 +199,13 @@ def role_priority_points(teams: list[Team], settings: QualitySettings) -> float:
     return settings.role_priority_coef * total
 
 
+def role_subrole_penalty(solution: "DraftSolution", settings: QualitySettings) -> float:
+    """
+    Convert NSGA subrole objective into weighted quality metric.
+    """
+    return settings.subrole_penalty_coef * float(solution.fitness_subrole)
+
+
 def evaluate_solution(
     solution: DraftSolution,
     role_ids: list[uuid.UUID],
@@ -226,12 +233,15 @@ def evaluate_solution(
     role_fairness = dp_role_fairness(teams, role_ids, role_counts, settings)
     uniformity = vq_uniformity(teams, settings)
     priority_points = role_priority_points(teams, settings)
+    subrole_penalty = role_subrole_penalty(solution, settings)
     
     return QualityMetrics(
         dp_fairness=round(fairness, 2),
         dp_role_fairness=round(role_fairness, 2),
         vq_uniformity=round(uniformity, 2),
         role_priority_points=round(priority_points, 2),
+        fitness_subrole=round(float(solution.fitness_subrole), 2),
+        role_subrole_penalty=round(subrole_penalty, 2),
     )
 
 
@@ -284,5 +294,6 @@ __all__ = [
     "QualitySettings",
     "rank_solutions",
     "role_priority_points",
+    "role_subrole_penalty",
     "vq_uniformity",
 ]

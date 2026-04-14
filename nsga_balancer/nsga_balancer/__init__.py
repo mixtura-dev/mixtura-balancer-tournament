@@ -17,6 +17,7 @@ from .models import (
     QualityMetrics,
     QualitySettings,
     RoleSettings,
+    SubroleSettings,
     Team,
 )
 from .quality_evaluator import (
@@ -64,5 +65,6 @@ __all__ = [
     "QualitySettings",
     "rank_solutions",
     "RoleSettings",
+    "SubroleSettings",
     "Team",
 ]

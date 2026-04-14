@@ -9,6 +9,10 @@ class QualityMetrics(BaseModel):
     dp_role_fairness: float = 0.0
     vq_uniformity: float = 0.0
     role_priority_points: float = 0.0
+    fitness_balance: float = 0.0
+    fitness_priority: float = 0.0
+    fitness_subrole: float = 0.0
+    role_subrole_penalty: float = 0.0
     evaluation: float = 0.0
 
     @property
@@ -45,8 +49,14 @@ class Balance(BaseModel):
     id: UUID
     quality: QualityMetrics
     teams: list[Team]
-    fitness_balance: float = 0.0
-    fitness_priority: float = 0.0
+
+    @property
+    def fitness_balance(self) -> float:
+        return self.quality.fitness_balance
+
+    @property
+    def fitness_priority(self) -> float:
+        return self.quality.fitness_priority
 
 
 class DraftBalances(BaseModel):

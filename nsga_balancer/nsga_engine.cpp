@@ -3,6 +3,7 @@
 #include <numeric>
 #include <array>
 #include <cmath>
+#include <tuple>
 
 NSGA2Engine::NSGA2Engine(
     const NSGASettings& nsga_settings,
@@ -24,10 +25,12 @@ NSGA2Engine::NSGA2Engine(
     if (num_workers_ <= 0) num_workers_ = engine_settings_.fallback_workers;
 
     team_slots_.reserve(players_in_team_);
+    role_slot_indices_.assign(num_roles_, {});
     for (int r_idx = 0; r_idx < num_roles_; ++r_idx) {
         auto it = role_settings_.find(role_ids_[r_idx]);
         int count = (it != role_settings_.end()) ? it->second.count_in_team : 1;
         for (int c = 0; c < count; ++c) {
+            role_slot_indices_[r_idx].push_back(static_cast<int>(team_slots_.size()));
             team_slots_.push_back(r_idx);
         }
     }
@@ -41,6 +44,34 @@ NSGA2Engine::NSGA2Engine(
             dup_role_groups_.push_back(indices);
         }
     }
+
+    role_subrole_ids_.assign(num_roles_, {});
+    role_subrole_capacities_.assign(num_roles_, {});
+    role_subrole_index_.assign(num_roles_, {});
+    for (int r_idx = 0; r_idx < num_roles_; ++r_idx) {
+        auto settings_it = role_settings_.find(role_ids_[r_idx]);
+        if (settings_it == role_settings_.end() || settings_it->second.subrole_capacities.empty()) {
+            continue;
+        }
+
+        std::vector<std::pair<int, int>> sorted_subroles(
+            settings_it->second.subrole_capacities.begin(),
+            settings_it->second.subrole_capacities.end()
+        );
+        std::sort(sorted_subroles.begin(), sorted_subroles.end(),
+            [](const auto& a, const auto& b) {
+                return a.first < b.first;
+            }
+        );
+
+        role_subrole_ids_[r_idx].reserve(sorted_subroles.size());
+        role_subrole_capacities_[r_idx].reserve(sorted_subroles.size());
+        for (const auto& [subrole_id, capacity] : sorted_subroles) {
+            role_subrole_index_[r_idx][subrole_id] = static_cast<int>(role_subrole_ids_[r_idx].size());
+            role_subrole_ids_[r_idx].push_back(subrole_id);
+            role_subrole_capacities_[r_idx].push_back(std::max(0, capacity));
+        }
+    }
 }
 
 void NSGA2Engine::build_matrices(const std::vector<PlayerInfo>& players) {
@@ -49,11 +80,38 @@ void NSGA2Engine::build_matrices(const std::vector<PlayerInfo>& players) {
 
     R_.assign(num_players_, std::vector<int>(num_roles_, 0));
     P_.assign(num_players_, std::vector<int>(num_roles_, 0));
+    S_.assign(num_players_, std::vector<std::vector<int>>(num_roles_));
 
     for (int i = 0; i < num_players_; ++i) {
         for (int j = 0; j < num_roles_; ++j) {
             R_[i][j] = players[i].get_rating_for_role(role_ids_[j]);
             P_[i][j] = players[i].get_priority_for_role(role_ids_[j]);
+
+            if (role_subrole_ids_[j].empty() || P_[i][j] <= 0) {
+                continue;
+            }
+
+            const auto* player_subroles = players[i].get_subroles_for_role(role_ids_[j]);
+            if (player_subroles == nullptr || player_subroles->empty()) {
+                S_[i][j].reserve(role_subrole_ids_[j].size());
+                for (int idx = 0; idx < static_cast<int>(role_subrole_ids_[j].size()); ++idx) {
+                    S_[i][j].push_back(idx);
+                }
+                continue;
+            }
+
+            std::vector<bool> seen(role_subrole_ids_[j].size(), false);
+            for (int subrole_id : *player_subroles) {
+                auto subrole_it = role_subrole_index_[j].find(subrole_id);
+                if (subrole_it == role_subrole_index_[j].end()) {
+                    continue;
+                }
+                int local_subrole_idx = subrole_it->second;
+                if (!seen[local_subrole_idx]) {
+                    seen[local_subrole_idx] = true;
+                    S_[i][j].push_back(local_subrole_idx);
+                }
+            }
         }
     }
 
@@ -104,41 +162,23 @@ std::vector<int> NSGA2Engine::generate_individual() {
     return individual;
 }
 
-std::vector<std::array<float, 2>> NSGA2Engine::evaluate_population(
+std::vector<std::array<float, 3>> NSGA2Engine::evaluate_population(
     const std::vector<std::vector<int>>& population
 ) {
     int pop_size = static_cast<int>(population.size());
-    std::vector<std::array<float, 2>> objectives(pop_size);
+    std::vector<std::array<float, 3>> objectives(pop_size);
 
     for (int ind = 0; ind < pop_size; ++ind) {
         const auto& chrom = population[ind];
 
         // Team ratings
         std::vector<float> team_ratings(num_teams_, 0.0f);
-        float role_std_sum = 0.0f;
-
         for (int t = 0; t < num_teams_; ++t) {
-            std::vector<float> role_ratings(num_roles_, 0.0f);
-            std::vector<int> role_counts(num_roles_, 0);
-
             for (int s = 0; s < players_in_team_; ++s) {
                 int slot_idx = t * players_in_team_ + s;
                 int p_idx = chrom[slot_idx];
                 int r_idx = team_slots_[s];
                 team_ratings[t] += static_cast<float>(R_[p_idx][r_idx]);
-                role_ratings[r_idx] += static_cast<float>(R_[p_idx][r_idx]);
-                role_counts[r_idx]++;
-            }
-
-            for (int r = 0; r < num_roles_; ++r) {
-                if (role_counts[r] > 1) {
-                    float mean = role_ratings[r] / static_cast<float>(role_counts[r]);
-                    float variance = 0.0f;
-                    // We need per-player ratings for this role within the team
-                    // But since we only have aggregated, approximate with 0 for same-role players
-                    // Actually the Python version uses R_vals.std(axis=1) which is std across players
-                    // for each role slot. Let's compute it properly.
-                }
             }
         }
 
@@ -149,7 +189,7 @@ std::vector<std::array<float, 2>> NSGA2Engine::evaluate_population(
         // Then .sum(axis=1) sums across slot positions
         // This means: for each slot position j, compute std of R[chrom[t*players_in_team+j]][team_slots[j]] across all teams t
 
-        role_std_sum = 0.0f;
+        float role_std_sum = 0.0f;
         for (int s = 0; s < players_in_team_; ++s) {
             float sum = 0.0f;
             for (int t = 0; t < num_teams_; ++t) {
@@ -204,13 +244,114 @@ std::vector<std::array<float, 2>> NSGA2Engine::evaluate_population(
             }
         }
         objectives[ind][1] = priority_penalty;
+
+        float subrole_penalty = 0.0f;
+        for (int t = 0; t < num_teams_; ++t) {
+            for (int r = 0; r < num_roles_; ++r) {
+                if (role_subrole_capacities_[r].empty()) {
+                    continue;
+                }
+                subrole_penalty += static_cast<float>(
+                    compute_subrole_penalty_for_team_role(chrom, t, r)
+                );
+            }
+        }
+        objectives[ind][2] = subrole_penalty;
     }
 
     return objectives;
 }
 
+int NSGA2Engine::compute_subrole_penalty_for_team_role(
+    const std::vector<int>& chrom,
+    int team_idx,
+    int role_idx
+) const {
+    const auto& capacities = role_subrole_capacities_[role_idx];
+    if (capacities.empty()) {
+        return 0;
+    }
+
+    const auto& local_slots = role_slot_indices_[role_idx];
+    if (local_slots.empty()) {
+        return 0;
+    }
+
+    std::vector<std::vector<int>> allowed_by_player;
+    allowed_by_player.reserve(local_slots.size());
+    int forced_penalty = 0;
+
+    for (int local_slot : local_slots) {
+        int slot_idx = team_idx * players_in_team_ + local_slot;
+        int p_idx = chrom[slot_idx];
+        const auto& allowed_subroles = S_[p_idx][role_idx];
+        if (allowed_subroles.empty()) {
+            forced_penalty += 1;
+            continue;
+        }
+        allowed_by_player.push_back(allowed_subroles);
+    }
+
+    if (allowed_by_player.empty()) {
+        return forced_penalty;
+    }
+
+    const int players_count = static_cast<int>(allowed_by_player.size());
+    const int subroles_count = static_cast<int>(capacities.size());
+    const int base = players_count + 1;
+
+    std::vector<int> counts(subroles_count, 0);
+    std::unordered_map<std::uint64_t, int> memo;
+
+    std::function<int(int)> dfs = [&](int idx) -> int {
+        if (idx == players_count) {
+            int penalty = 0;
+            for (int s = 0; s < subroles_count; ++s) {
+                if (counts[s] > capacities[s]) {
+                    penalty += counts[s];
+                }
+            }
+            return penalty;
+        }
+
+        bool can_encode = true;
+        std::uint64_t key = static_cast<std::uint64_t>(idx);
+        std::uint64_t multiplier = static_cast<std::uint64_t>(base);
+
+        for (int count : counts) {
+            if (multiplier > std::numeric_limits<std::uint64_t>::max() / static_cast<std::uint64_t>(base)) {
+                can_encode = false;
+                break;
+            }
+            key += static_cast<std::uint64_t>(count) * multiplier;
+            multiplier *= static_cast<std::uint64_t>(base);
+        }
+
+        if (can_encode) {
+            auto memo_it = memo.find(key);
+            if (memo_it != memo.end()) {
+                return memo_it->second;
+            }
+        }
+
+        int best = std::numeric_limits<int>::max();
+        for (int subrole_idx : allowed_by_player[idx]) {
+            counts[subrole_idx] += 1;
+            best = std::min(best, dfs(idx + 1));
+            counts[subrole_idx] -= 1;
+        }
+
+        if (can_encode) {
+            memo[key] = best;
+        }
+        return best;
+    };
+
+    return forced_penalty + dfs(0);
+}
+
 std::vector<std::vector<int>> NSGA2Engine::fast_non_dominated_sort(
-    const std::vector<std::array<float, 2>>& objectives
+    const std::vector<std::array<float, 3>>& objectives
 ) {
     int pop_size = static_cast<int>(objectives.size());
     std::vector<std::vector<int>> S(pop_size);
@@ -221,10 +362,30 @@ std::vector<std::vector<int>> NSGA2Engine::fast_non_dominated_sort(
     for (int p = 0; p < pop_size; ++p) {
         for (int q = 0; q < pop_size; ++q) {
             if (p == q) continue;
-            bool p_dominates_q = (objectives[p][0] <= objectives[q][0] && objectives[p][1] <= objectives[q][1])
-                              && (objectives[p][0] < objectives[q][0] || objectives[p][1] < objectives[q][1]);
-            bool q_dominates_p = (objectives[q][0] <= objectives[p][0] && objectives[q][1] <= objectives[p][1])
-                              && (objectives[q][0] < objectives[p][0] || objectives[q][1] < objectives[p][1]);
+
+            bool p_dominates_q = true;
+            bool p_strict_better = false;
+            bool q_dominates_p = true;
+            bool q_strict_better = false;
+
+            for (int m = 0; m < 3; ++m) {
+                if (objectives[p][m] > objectives[q][m]) {
+                    p_dominates_q = false;
+                }
+                if (objectives[p][m] < objectives[q][m]) {
+                    p_strict_better = true;
+                }
+
+                if (objectives[q][m] > objectives[p][m]) {
+                    q_dominates_p = false;
+                }
+                if (objectives[q][m] < objectives[p][m]) {
+                    q_strict_better = true;
+                }
+            }
+
+            p_dominates_q = p_dominates_q && p_strict_better;
+            q_dominates_p = q_dominates_p && q_strict_better;
 
             if (p_dominates_q) {
                 S[p].push_back(q);
@@ -266,11 +427,11 @@ std::vector<std::vector<int>> NSGA2Engine::fast_non_dominated_sort(
 }
 
 std::vector<float> NSGA2Engine::calculate_crowding_distance(
-    const std::vector<std::array<float, 2>>& objectives,
+    const std::vector<std::array<float, 3>>& objectives,
     const std::vector<std::vector<int>>& fronts
 ) {
     int pop_size = static_cast<int>(objectives.size());
-    int num_obj = 2;
+    int num_obj = 3;
     std::vector<float> distances(pop_size, 0.0f);
 
     for (const auto& front : fronts) {
@@ -311,8 +472,9 @@ std::vector<int> NSGA2Engine::tournament_selection(
     int num_select,
     const std::vector<int>& ranks,
     const std::vector<float>& distances,
-    const std::vector<std::array<float, 2>>& objectives
+    const std::vector<std::array<float, 3>>& objectives
 ) {
+    (void)objectives;
     std::vector<int> selected;
     selected.reserve(num_select);
 
@@ -445,7 +607,7 @@ std::vector<int> NSGA2Engine::mutate(const std::vector<int>& parent) {
 
 std::vector<DraftSolution> NSGA2Engine::decode_results(
     const std::vector<std::vector<int>>& chroms,
-    const std::vector<std::array<float, 2>>& objs
+    const std::vector<std::array<float, 3>>& objs
 ) {
     std::vector<DraftSolution> solutions;
     solutions.reserve(chroms.size());
@@ -456,6 +618,7 @@ std::vector<DraftSolution> NSGA2Engine::decode_results(
         sol.solution_id = static_cast<int>(sol_id) + 1;
         sol.fitness_balance = objs[sol_id][0];
         sol.fitness_priority = objs[sol_id][1];
+        sol.fitness_subrole = objs[sol_id][2];
 
         sol.teams.resize(num_teams_);
 
@@ -522,7 +685,7 @@ std::vector<DraftSolution> NSGA2Engine::run(const std::vector<PlayerInfo>& playe
 
         // Combined population
         std::vector<std::vector<int>> combined_pop(pop_size * 2);
-        std::vector<std::array<float, 2>> combined_obj(pop_size * 2);
+        std::vector<std::array<float, 3>> combined_obj(pop_size * 2);
 
         for (int i = 0; i < pop_size; ++i) {
             combined_pop[i] = std::move(population[i]);
@@ -574,12 +737,13 @@ std::vector<DraftSolution> NSGA2Engine::run(const std::vector<PlayerInfo>& playe
 
     // Filter duplicates
     std::vector<int> unique_front;
-    std::set<std::pair<float, float>> seen_fitness;
+    std::set<std::tuple<float, float, float>> seen_fitness;
 
     for (int idx : pareto_front) {
         float fit_balance = std::round(objectives[idx][0] * 10000.0f) / 10000.0f;
         float fit_priority = std::round(objectives[idx][1] * 10000.0f) / 10000.0f;
-        auto fit_tuple = std::make_pair(fit_balance, fit_priority);
+        float fit_subrole = std::round(objectives[idx][2] * 10000.0f) / 10000.0f;
+        auto fit_tuple = std::make_tuple(fit_balance, fit_priority, fit_subrole);
 
         if (seen_fitness.find(fit_tuple) == seen_fitness.end()) {
             seen_fitness.insert(fit_tuple);
@@ -606,7 +770,7 @@ std::vector<DraftSolution> NSGA2Engine::run(const std::vector<PlayerInfo>& playe
 
     // Build result chromosomes and objectives
     std::vector<std::vector<int>> result_chroms;
-    std::vector<std::array<float, 2>> result_objs;
+    std::vector<std::array<float, 3>> result_objs;
     result_chroms.reserve(selected_solutions.size());
     result_objs.reserve(selected_solutions.size());
 

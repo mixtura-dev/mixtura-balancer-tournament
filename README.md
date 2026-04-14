@@ -111,11 +111,11 @@ DraftBalances(
                 dp_fairness=0.95,
                 dp_role_fairness=0.92,
                 vq_uniformity=0.88,
-                role_priority_points=85.5
+                role_priority_points=85.5,
+                fitness_balance=0.02,
+                fitness_priority=15.0,
             ),
             teams=[Team(players=[...], total_rating=7500)],
-            fitness_balance=0.02,
-            fitness_priority=15.0
         )
     ]
 )
@@ -129,6 +129,8 @@ DraftBalances(
 | `dp_role_fairness` | Role distribution fairness (0-1) |
 | `vq_uniformity` | Variance-based uniformity (0-1) |
 | `role_priority_points` | Priority satisfaction score |
+| `fitness_balance` | NSGA balance objective |
+| `fitness_priority` | NSGA priority objective |
 
 ## Configuration
 
