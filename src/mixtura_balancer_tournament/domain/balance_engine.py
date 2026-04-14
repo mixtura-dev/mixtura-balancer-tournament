@@ -97,6 +97,9 @@ class AsyncBalanceEngine:
                 else 0.0,
                 fitness_balance=sol.fitness_balance if sol.quality else 0.0,
                 fitness_priority=sol.fitness_priority if sol.quality else 0.0,
+                fitness_role_imbalance=sol.fitness_role_imbalance
+                if sol.quality
+                else 0.0,
                 fitness_subrole=sol.fitness_subrole
                 if sol.quality
                 else 0.0,
@@ -162,7 +165,8 @@ class AsyncBalanceEngine:
             generations=request.balance_settings.math.generations,
             num_pareto_solutions=request.balance_settings.math.num_pareto_solutions,
             weight_team_variance=request.balance_settings.math.weight_team_variance,
-            weight_role_variance=request.balance_settings.math.weight_role_variance,
+            role_imbalance_blend=request.balance_settings.math.role_imbalance_blend,
+            subrole_blend=request.balance_settings.math.subrole_blend,
             penalty_invalid_role=request.balance_settings.math.penalty_invalid_role,
             penalty_prio_1=request.balance_settings.math.penalty_prio_1,
             penalty_prio_2=request.balance_settings.math.penalty_prio_2,

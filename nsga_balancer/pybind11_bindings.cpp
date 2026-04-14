@@ -74,7 +74,8 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("generations", &NSGASettings::generations)
         .def_readwrite("num_pareto_solutions", &NSGASettings::num_pareto_solutions)
         .def_readwrite("weight_team_variance", &NSGASettings::weight_team_variance)
-        .def_readwrite("weight_role_variance", &NSGASettings::weight_role_variance)
+        .def_readwrite("role_imbalance_blend", &NSGASettings::role_imbalance_blend)
+        .def_readwrite("subrole_blend", &NSGASettings::subrole_blend)
         .def_readwrite("penalty_invalid_role", &NSGASettings::penalty_invalid_role)
         .def_readwrite("penalty_prio_1", &NSGASettings::penalty_prio_1)
         .def_readwrite("penalty_prio_2", &NSGASettings::penalty_prio_2)
@@ -138,12 +139,14 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("solution_id", &DraftSolution::solution_id)
         .def_readwrite("fitness_balance", &DraftSolution::fitness_balance)
         .def_readwrite("fitness_priority", &DraftSolution::fitness_priority)
+        .def_readwrite("fitness_role_imbalance", &DraftSolution::fitness_role_imbalance)
         .def_readwrite("fitness_subrole", &DraftSolution::fitness_subrole)
         .def_readwrite("teams", &DraftSolution::teams)
         .def("__repr__", [](const DraftSolution& s) {
             return "DraftSolution(id=" + std::to_string(s.solution_id) +
                    ", balance=" + std::to_string(s.fitness_balance) +
                    ", priority=" + std::to_string(s.fitness_priority) +
+                   ", role_imbalance=" + std::to_string(s.fitness_role_imbalance) +
                    ", subrole=" + std::to_string(s.fitness_subrole) +
                    ", teams=" + std::to_string(s.teams.size()) + ")";
         });
@@ -211,7 +214,8 @@ PYBIND11_MODULE(_core, m)
 
     m.def("create_nsga_settings",
         [](int population_size, int generations, int num_pareto_solutions,
-           float weight_team_variance, float weight_role_variance,
+           float weight_team_variance, float role_imbalance_blend,
+           float subrole_blend,
            float penalty_invalid_role, float penalty_prio_1,
            float penalty_prio_2, float penalty_prio_3) {
             NSGASettings s;
@@ -219,7 +223,8 @@ PYBIND11_MODULE(_core, m)
             s.generations = generations;
             s.num_pareto_solutions = num_pareto_solutions;
             s.weight_team_variance = weight_team_variance;
-            s.weight_role_variance = weight_role_variance;
+            s.role_imbalance_blend = role_imbalance_blend;
+            s.subrole_blend = subrole_blend;
             s.penalty_invalid_role = penalty_invalid_role;
             s.penalty_prio_1 = penalty_prio_1;
             s.penalty_prio_2 = penalty_prio_2;
@@ -230,7 +235,8 @@ PYBIND11_MODULE(_core, m)
         py::arg("generations") = 1000,
         py::arg("num_pareto_solutions") = 50,
         py::arg("weight_team_variance") = 1.0f,
-        py::arg("weight_role_variance") = 0.5f,
+        py::arg("role_imbalance_blend") = 0.1f,
+        py::arg("subrole_blend") = 0.1f,
         py::arg("penalty_invalid_role") = 10000.0f,
         py::arg("penalty_prio_1") = 10.0f,
         py::arg("penalty_prio_2") = 3.0f,

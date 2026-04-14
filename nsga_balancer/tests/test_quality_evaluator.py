@@ -117,6 +117,7 @@ def test_evaluate_solution(sample_teams):
     assert quality.dp_role_fairness >= 0
     assert quality.vq_uniformity >= 0
     assert quality.role_priority_points >= 0
+    assert quality.fitness_role_imbalance == 0.0
     assert quality.role_subrole_penalty >= 0
 
 
@@ -135,6 +136,7 @@ def test_subrole_penalty_from_fitness(sample_teams):
 
     quality = evaluate_solution(solution, [role_a, role_b], role_counts, settings)
 
+    assert quality.fitness_role_imbalance == 0.0
     assert quality.fitness_subrole == 2.0
     assert quality.role_subrole_penalty == 80.0
 
@@ -177,18 +179,20 @@ def test_draft_solution_evaluation():
         solution_id=1,
         fitness_balance=10.0,
         fitness_priority=50.0,
+        fitness_role_imbalance=5.0,
         teams=[],
     )
-    
-    assert solution.evaluation == 60.0
-    
+
+    assert solution.evaluation == 65.0
+
     solution.quality = QualityMetrics(
         dp_fairness=5.0,
         dp_role_fairness=3.0,
         vq_uniformity=1.0,
         role_priority_points=20.0,
+        fitness_role_imbalance=4.0,
     )
-    
+
     assert solution.quality.evaluation == 29.0
     assert solution.evaluation == 29.0
 
@@ -199,8 +203,9 @@ def test_quality_metrics_defaults():
         dp_role_fairness=2.0,
         vq_uniformity=0.5,
         role_priority_points=10.0,
+        fitness_role_imbalance=4.0,
     )
-    
+
     assert quality.evaluation == 13.5
 
 

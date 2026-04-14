@@ -93,8 +93,10 @@ def test_draft_solution():
         solution_id=1,
         fitness_balance=10.5,
         fitness_priority=50.0,
+        fitness_role_imbalance=7.5,
         teams=teams,
     )
     assert solution.solution_id == 1
     assert solution.fitness_balance == 10.5
+    assert solution.fitness_role_imbalance == 7.5
     assert len(solution.teams) == 2

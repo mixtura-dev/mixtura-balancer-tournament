@@ -11,6 +11,7 @@ class QualityMetrics(BaseModel):
     role_priority_points: float = 0.0
     fitness_balance: float = 0.0
     fitness_priority: float = 0.0
+    fitness_role_imbalance: float = 0.0
     fitness_subrole: float = 0.0
     role_subrole_penalty: float = 0.0
     evaluation: float = 0.0

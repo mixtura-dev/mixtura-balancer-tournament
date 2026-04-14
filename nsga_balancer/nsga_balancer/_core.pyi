@@ -45,7 +45,8 @@ class NSGASettings:
     generations: int
     num_pareto_solutions: int
     weight_team_variance: float
-    weight_role_variance: float
+    role_imbalance_blend: float
+    subrole_blend: float
     penalty_invalid_role: float
     penalty_prio_1: float
     penalty_prio_2: float
@@ -89,6 +90,7 @@ class DraftSolution:
     solution_id: int
     fitness_balance: float
     fitness_priority: float
+    fitness_role_imbalance: float
     fitness_subrole: float
     teams: list[TeamResult]
 
@@ -136,7 +138,8 @@ def create_nsga_settings(
     generations: int = 1000,
     num_pareto_solutions: int = 50,
     weight_team_variance: float = 1.0,
-    weight_role_variance: float = 0.5,
+    role_imbalance_blend: float = 0.1,
+    subrole_blend: float = 0.1,
     penalty_invalid_role: float = 10000.0,
     penalty_prio_1: float = 10.0,
     penalty_prio_2: float = 3.0,

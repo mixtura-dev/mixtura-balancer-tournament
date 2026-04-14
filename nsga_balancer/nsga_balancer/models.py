@@ -39,7 +39,8 @@ class MathSettings:
     generations: int = 1000
     num_pareto_solutions: int = 50
     weight_team_variance: float = 1.0
-    weight_role_variance: float = 0.5
+    role_imbalance_blend: float = 0.1
+    subrole_blend: float = 0.1
     penalty_invalid_role: float = 10000.0
     penalty_prio_1: float = 10.0
     penalty_prio_2: float = 3.0
@@ -73,7 +74,8 @@ class NSGASettings:
     generations: int = 1000
     num_pareto_solutions: int = 50
     weight_team_variance: float = 1.0
-    weight_role_variance: float = 0.5
+    role_imbalance_blend: float = 0.1
+    subrole_blend: float = 0.1
     penalty_invalid_role: float = 10000.0
     penalty_prio_1: float = 10.0
     penalty_prio_2: float = 3.0
@@ -99,6 +101,7 @@ class QualityMetrics:
     dp_role_fairness: float
     vq_uniformity: float
     role_priority_points: float
+    fitness_role_imbalance: float = 0.0
     fitness_subrole: float = 0.0
     role_subrole_penalty: float = 0.0
 
@@ -109,7 +112,6 @@ class QualityMetrics:
             + self.dp_role_fairness
             + self.vq_uniformity
             + self.role_priority_points
-            + self.role_subrole_penalty
         )
 
 
@@ -133,6 +135,7 @@ class DraftSolution:
     solution_id: int
     fitness_balance: float
     fitness_priority: float
+    fitness_role_imbalance: float = 0.0
     fitness_subrole: float = 0.0
     quality: QualityMetrics | None = None
     teams: list[Team] = field(default_factory=list)
@@ -141,7 +144,12 @@ class DraftSolution:
     def evaluation(self) -> float:
         if self.quality is not None:
             return self.quality.evaluation
-        return self.fitness_balance + self.fitness_priority + self.fitness_subrole
+        return (
+            self.fitness_balance
+            + self.fitness_priority
+            + self.fitness_role_imbalance
+            + self.fitness_subrole
+        )
 
 
 __all__ = [

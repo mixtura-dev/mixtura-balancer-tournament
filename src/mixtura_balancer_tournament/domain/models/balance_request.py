@@ -62,7 +62,12 @@ class MathSettings(BaseModel):
     generations: int = Field(default=1000, ge=1, description="NSGA-II generations count.")
     num_pareto_solutions: int = Field(default=50, ge=1, description="Number of selected solutions from the Pareto front.")
     weight_team_variance: float = Field(default=1.0, description="Weight of team variance in balance objective.")
-    weight_role_variance: float = Field(default=0.7, description="Weight of role variance in balance objective.")
+    role_imbalance_blend: float = Field(
+        default=0.1, ge=0, description="Blend coefficient for role imbalance in the folded balance objective."
+    )
+    subrole_blend: float = Field(
+        default=0.1, ge=0, description="Blend coefficient for subrole penalty in the folded priority objective."
+    )
     penalty_invalid_role: float = Field(default=10000.0, description="Penalty for assigning an invalid role.")
     penalty_prio_1: float = Field(default=10.0, description="Penalty for priority level 1.")
     penalty_prio_2: float = Field(default=3.0, description="Penalty for priority level 2.")

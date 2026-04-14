@@ -240,6 +240,7 @@ def evaluate_solution(
         dp_role_fairness=round(role_fairness, 2),
         vq_uniformity=round(uniformity, 2),
         role_priority_points=round(priority_points, 2),
+        fitness_role_imbalance=round(float(solution.fitness_role_imbalance), 2),
         fitness_subrole=round(float(solution.fitness_subrole), 2),
         role_subrole_penalty=round(subrole_penalty, 2),
     )

@@ -69,7 +69,8 @@ struct NSGASettings {
     int num_pareto_solutions = 50;
 
     float weight_team_variance = 1.0f;
-    float weight_role_variance = 0.5f;
+    float role_imbalance_blend = 0.1f;
+    float subrole_blend = 0.1f;
 
     float penalty_invalid_role = 10000.0f;
     float penalty_prio_1 = 10.0f;
@@ -100,8 +101,17 @@ struct DraftSolution {
     int solution_id;
     float fitness_balance;
     float fitness_priority;
+    float fitness_role_imbalance;
     float fitness_subrole;
     std::vector<TeamResult> teams;
+};
+
+struct EvaluationResult {
+    std::array<float, 2> objectives;
+    float fitness_balance;
+    float fitness_priority;
+    float fitness_role_imbalance;
+    float fitness_subrole;
 };
 
 // ==================== NSGA-II Engine ====================
@@ -148,16 +158,16 @@ private:
 
     std::vector<int> generate_individual();
 
-    std::vector<std::array<float, 3>> evaluate_population(
+    std::vector<EvaluationResult> evaluate_population(
         const std::vector<std::vector<int>>& population
     );
 
     std::vector<std::vector<int>> fast_non_dominated_sort(
-        const std::vector<std::array<float, 3>>& objectives
+        const std::vector<std::array<float, 2>>& objectives
     );
 
     std::vector<float> calculate_crowding_distance(
-        const std::vector<std::array<float, 3>>& objectives,
+        const std::vector<std::array<float, 2>>& objectives,
         const std::vector<std::vector<int>>& fronts
     );
 
@@ -165,14 +175,14 @@ private:
         int num_select,
         const std::vector<int>& ranks,
         const std::vector<float>& distances,
-        const std::vector<std::array<float, 3>>& objectives
+        const std::vector<std::array<float, 2>>& objectives
     );
 
     std::vector<int> mutate(const std::vector<int>& parent);
 
     std::vector<DraftSolution> decode_results(
         const std::vector<std::vector<int>>& chroms,
-        const std::vector<std::array<float, 3>>& objs
+        const std::vector<EvaluationResult>& evaluations
     );
 
     int compute_subrole_penalty_for_team_role(

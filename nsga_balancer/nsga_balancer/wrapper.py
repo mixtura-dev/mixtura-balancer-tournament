@@ -85,7 +85,8 @@ class NSGA2Balancer:
         cpp_settings.generations = settings.generations
         cpp_settings.num_pareto_solutions = settings.num_pareto_solutions
         cpp_settings.weight_team_variance = settings.weight_team_variance
-        cpp_settings.weight_role_variance = settings.weight_role_variance
+        cpp_settings.role_imbalance_blend = settings.role_imbalance_blend
+        cpp_settings.subrole_blend = settings.subrole_blend
         cpp_settings.penalty_invalid_role = settings.penalty_invalid_role
         cpp_settings.penalty_prio_1 = settings.penalty_prio_1
         cpp_settings.penalty_prio_2 = settings.penalty_prio_2
@@ -158,6 +159,7 @@ class NSGA2Balancer:
                     solution_id=cpp_sol.solution_id,
                     fitness_balance=cpp_sol.fitness_balance,
                     fitness_priority=cpp_sol.fitness_priority,
+                    fitness_role_imbalance=cpp_sol.fitness_role_imbalance,
                     fitness_subrole=cpp_sol.fitness_subrole,
                     teams=teams,
                 )

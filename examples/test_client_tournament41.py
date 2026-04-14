@@ -231,19 +231,20 @@ def print_result(
     for balance_index, balance in enumerate(result.balances[:limit], start=1):
         print(f"\nBalance #{balance_index}")
         print(
-            "Metrics: "
+            "Ranking metrics: "
             f"evaluation={balance.quality.evaluation:.3f}, "
             f"dp_fairness={balance.quality.dp_fairness:.3f}, "
             f"dp_role_fairness={balance.quality.dp_role_fairness:.3f}, "
             f"vq_uniformity={balance.quality.vq_uniformity:.3f}, "
             f"role_priority_points={balance.quality.role_priority_points:.3f}, "
-            f"fitness_subrole={balance.quality.fitness_subrole:.3f}, "
             f"role_subrole_penalty={balance.quality.role_subrole_penalty:.3f}"
         )
         print(
             "NSGA fitness: "
             f"fitness_balance={balance.quality.fitness_balance:.3f}, "
-            f"fitness_priority={balance.quality.fitness_priority:.3f}"
+            f"fitness_priority={balance.quality.fitness_priority:.3f}, "
+            f"fitness_role_imbalance={balance.quality.fitness_role_imbalance:.3f}, "
+            f"fitness_subrole={balance.quality.fitness_subrole:.3f}"
         )
 
         for team_index, team in enumerate(balance.teams, start=1):
@@ -263,8 +264,13 @@ def print_result(
     for balance_index, balance in enumerate(result.balances, start=1):
         print(
             f"  Balance #{balance_index}: "
+            f"evaluation={balance.quality.evaluation:.3f}, "
+            f"fairness={balance.quality.dp_fairness:.3f}, "
+            f"role_fairness={balance.quality.dp_role_fairness:.3f}, "
+            f"uniformity={balance.quality.vq_uniformity:.3f}, "
             f"offroles={count_offroles(balance)}, "
             f"team_spread={team_rating_spread(balance)}, "
+            f"fitness_role_imbalance={balance.quality.fitness_role_imbalance:.3f}, "
             f"fitness_subrole={balance.quality.fitness_subrole:.3f}"
         )
 
