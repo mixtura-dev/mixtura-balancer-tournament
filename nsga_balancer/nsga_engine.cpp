@@ -7,6 +7,33 @@
 
 namespace {
 
+MetricSummary summarize_metric(
+    const std::vector<int>& front,
+    const std::vector<EvaluationResult>& evaluations,
+    float EvaluationResult::*metric
+) {
+    MetricSummary summary;
+    if (front.empty()) {
+        return summary;
+    }
+
+    float min_value = (evaluations[front[0]].*metric);
+    float max_value = min_value;
+    float sum = 0.0f;
+
+    for (int idx : front) {
+        float value = evaluations[idx].*metric;
+        min_value = std::min(min_value, value);
+        max_value = std::max(max_value, value);
+        sum += value;
+    }
+
+    summary.min_value = min_value;
+    summary.avg_value = sum / static_cast<float>(front.size());
+    summary.max_value = max_value;
+    return summary;
+}
+
 }  // namespace
 
 NSGA2Engine::NSGA2Engine(
@@ -654,10 +681,47 @@ std::vector<DraftSolution> NSGA2Engine::decode_results(
     return solutions;
 }
 
-std::vector<DraftSolution> NSGA2Engine::run(const std::vector<PlayerInfo>& players) {
+ProgressSnapshot NSGA2Engine::build_progress_snapshot(
+    int generation,
+    const std::vector<int>& pareto_front,
+    const std::vector<EvaluationResult>& evaluations
+) const {
+    ProgressSnapshot snapshot;
+    snapshot.generation = generation;
+    snapshot.total_generations = nsga_settings_.generations;
+    snapshot.pareto_front_size = static_cast<int>(pareto_front.size());
+    snapshot.fitness_balance = summarize_metric(
+        pareto_front,
+        evaluations,
+        &EvaluationResult::fitness_balance
+    );
+    snapshot.fitness_priority = summarize_metric(
+        pareto_front,
+        evaluations,
+        &EvaluationResult::fitness_priority
+    );
+    snapshot.fitness_role_imbalance = summarize_metric(
+        pareto_front,
+        evaluations,
+        &EvaluationResult::fitness_role_imbalance
+    );
+    snapshot.fitness_subrole = summarize_metric(
+        pareto_front,
+        evaluations,
+        &EvaluationResult::fitness_subrole
+    );
+    return snapshot;
+}
+
+std::vector<DraftSolution> NSGA2Engine::run(
+    const std::vector<PlayerInfo>& players,
+    const std::function<void(const ProgressSnapshot&)>& progress_callback,
+    int progress_every
+) {
     build_matrices(players);
 
     int pop_size = nsga_settings_.population_size;
+    int normalized_progress_every = std::max(1, progress_every);
 
     // Initialize population
     std::vector<std::vector<int>> population(pop_size);
@@ -673,6 +737,17 @@ std::vector<DraftSolution> NSGA2Engine::run(const std::vector<PlayerInfo>& playe
 
     for (int gen = 0; gen < nsga_settings_.generations; ++gen) {
         auto fronts = fast_non_dominated_sort(objectives);
+
+        if (progress_callback && !fronts.empty() && !fronts[0].empty()) {
+            int generation = gen + 1;
+            bool should_report =
+                generation == 1
+                || generation == nsga_settings_.generations
+                || generation % normalized_progress_every == 0;
+            if (should_report) {
+                progress_callback(build_progress_snapshot(generation, fronts[0], evaluations));
+            }
+        }
 
         std::vector<int> ranks(pop_size, 0);
         for (size_t r = 0; r < fronts.size(); ++r) {

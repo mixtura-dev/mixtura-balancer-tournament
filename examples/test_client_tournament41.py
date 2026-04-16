@@ -6,13 +6,18 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import json
 import uuid
 from pathlib import Path
 from typing import Any
 
 from mixtura_balancer_tournament.domain.balance_engine import get_engine
-from mixtura_balancer_tournament.domain.models.balance import DraftBalances
+from mixtura_balancer_tournament.domain.models.balance import (
+    BalanceProgress,
+    DraftBalances,
+    ProgressMetricSummary,
+)
 from mixtura_balancer_tournament.domain.models.balance_request import (
     BalanceRequest,
     BalanceSettings,
@@ -26,6 +31,8 @@ from mixtura_balancer_tournament.domain.models.balance_request import (
 ROLE_NAMES = ("tank", "dps", "support")
 ROLE_COUNTS = {"tank": 1, "dps": 2, "support": 2}
 UUID_NAMESPACE = uuid.UUID("3fce03d0-d7e0-4c81-9a35-a24b5fb9df1d")
+BALANCE_QUEUE = "mix_balance_service.balance"
+PROGRESS_QUEUE = "mix_balance_service.balance.progress"
 
 
 def stable_uuid(name: str) -> uuid.UUID:
@@ -164,12 +171,20 @@ async def send_rabbit_request(request: BalanceRequest) -> DraftBalances:
     from mixtura_balancer_tournament.app.schemas import ResponseMessage
     from mixtura_balancer_tournament.env_config import env
 
+    progress_task = asyncio.create_task(_consume_progress_updates(request.draft_id, env.rabbit.url))
     async with RabbitBroker(env.rabbit.url) as broker:
-        response = await broker.request(
-            message=request,
-            queue="mix_balance_service.balance",
-            timeout=300,
-        )
+        try:
+            response = await broker.request(
+                message=request,
+                queue=BALANCE_QUEUE,
+                timeout=300,
+            )
+        finally:
+            progress_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await progress_task
+
+    print()
 
     parsed = ResponseMessage[DraftBalances].model_validate_json(response.body)
     if parsed.status != 200:
@@ -179,7 +194,53 @@ async def send_rabbit_request(request: BalanceRequest) -> DraftBalances:
 
 async def run_direct(request: BalanceRequest) -> DraftBalances:
     engine = get_engine()
-    return await engine.find_balances_async(request)
+    result = await engine.find_balances_async(
+        request,
+        progress_callback=_print_progress_update,
+    )
+    print()
+    return result
+
+
+def _format_metric_summary(metric: ProgressMetricSummary) -> str:
+    return f"min={metric.min_value:.2f}, avg={metric.avg_value:.2f}, max={metric.max_value:.2f}"
+
+
+async def _print_progress_update(progress: BalanceProgress) -> None:
+    print(
+        "Progress: "
+        f"{progress.processed_generations}/{progress.total_generations}, "
+        f"pareto_front={progress.pareto_front_size}, "
+        f"balance[{_format_metric_summary(progress.fitness_balance)}], "
+        f"priority[{_format_metric_summary(progress.fitness_priority)}], "
+        f"role_imbalance[{_format_metric_summary(progress.fitness_role_imbalance)}], "
+        f"subrole[{_format_metric_summary(progress.fitness_subrole)}]"
+    )
+
+
+async def _consume_progress_updates(draft_id: uuid.UUID, rabbit_url: str) -> None:
+    import aio_pika
+
+    from mixtura_balancer_tournament.app.schemas import ResponseMessage
+
+    connection = await aio_pika.connect_robust(rabbit_url)
+    try:
+        channel = await connection.channel()
+        queue = await channel.declare_queue(PROGRESS_QUEUE, durable=True)
+
+        async with queue.iterator() as queue_iter:
+            async for message in queue_iter:
+                async with message.process():
+                    if message.correlation_id != str(draft_id):
+                        continue
+
+                    parsed = ResponseMessage[BalanceProgress].model_validate_json(message.body)
+                    if parsed.status != 102:
+                        continue
+
+                    await _print_progress_update(parsed.message)
+    finally:
+        await connection.close()
 
 
 def print_summary(

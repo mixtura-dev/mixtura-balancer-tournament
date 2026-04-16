@@ -13,6 +13,7 @@
 #include <set>
 #include <limits>
 #include <array>
+#include <functional>
 
 // ==================== Data Structures ====================
 
@@ -114,6 +115,22 @@ struct EvaluationResult {
     float fitness_subrole;
 };
 
+struct MetricSummary {
+    float min_value = 0.0f;
+    float avg_value = 0.0f;
+    float max_value = 0.0f;
+};
+
+struct ProgressSnapshot {
+    int generation = 0;
+    int total_generations = 0;
+    int pareto_front_size = 0;
+    MetricSummary fitness_balance;
+    MetricSummary fitness_priority;
+    MetricSummary fitness_role_imbalance;
+    MetricSummary fitness_subrole;
+};
+
 // ==================== NSGA-II Engine ====================
 
 class NSGA2Engine {
@@ -127,7 +144,9 @@ public:
     );
 
     std::vector<DraftSolution> run(
-        const std::vector<PlayerInfo>& players
+        const std::vector<PlayerInfo>& players,
+        const std::function<void(const ProgressSnapshot&)>& progress_callback = nullptr,
+        int progress_every = 1
     );
 
     const NSGASettings& nsga_settings() const { return nsga_settings_; }
@@ -184,6 +203,12 @@ private:
         const std::vector<std::vector<int>>& chroms,
         const std::vector<EvaluationResult>& evaluations
     );
+
+    ProgressSnapshot build_progress_snapshot(
+        int generation,
+        const std::vector<int>& pareto_front,
+        const std::vector<EvaluationResult>& evaluations
+    ) const;
 
     int compute_subrole_penalty_for_team_role(
         const std::vector<int>& chrom,

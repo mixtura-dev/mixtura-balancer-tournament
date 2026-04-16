@@ -6,6 +6,7 @@ NSGA Balancer wrapper for C++ bindings.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 
 from . import _core
 from .models import (
@@ -13,6 +14,8 @@ from .models import (
     BalanceRequest,
     DraftSolution,
     MathSettings,
+    MetricSummary,
+    ProgressSnapshot,
     RoleSettings,
     Team,
 )
@@ -166,16 +169,55 @@ class NSGA2Balancer:
             )
         return solutions
 
-    def run(self) -> list[DraftSolution]:
+    def _convert_progress_snapshot(self, cpp_snapshot: _core.ProgressSnapshot) -> ProgressSnapshot:
+        def convert_metric(metric: _core.MetricSummary) -> MetricSummary:
+            return MetricSummary(
+                min_value=metric.min_value,
+                avg_value=metric.avg_value,
+                max_value=metric.max_value,
+            )
+
+        return ProgressSnapshot(
+            generation=cpp_snapshot.generation,
+            total_generations=cpp_snapshot.total_generations,
+            pareto_front_size=cpp_snapshot.pareto_front_size,
+            fitness_balance=convert_metric(cpp_snapshot.fitness_balance),
+            fitness_priority=convert_metric(cpp_snapshot.fitness_priority),
+            fitness_role_imbalance=convert_metric(cpp_snapshot.fitness_role_imbalance),
+            fitness_subrole=convert_metric(cpp_snapshot.fitness_subrole),
+        )
+
+    def run(
+        self,
+        progress_callback: Callable[[ProgressSnapshot], None] | None = None,
+        progress_every: int = 10,
+    ) -> list[DraftSolution]:
         member_mapper = UUIDMapper()
         cpp_players = self._convert_players(self.request.players, member_mapper)
-        cpp_solutions = self._cpp_engine.run(cpp_players)
+
+        cpp_progress_callback = None
+        if progress_callback is not None:
+            def cpp_progress_callback(cpp_snapshot: _core.ProgressSnapshot) -> None:
+                progress_callback(self._convert_progress_snapshot(cpp_snapshot))
+
+        cpp_solutions = self._cpp_engine.run(
+            cpp_players,
+            progress_callback=cpp_progress_callback,
+            progress_every=progress_every,
+        )
         return self._convert_results(cpp_solutions, member_mapper)
 
 
-def balance_teams_nsga(request: BalanceRequest) -> list[DraftSolution]:
+def balance_teams_nsga(
+    request: BalanceRequest,
+    progress_callback: Callable[[ProgressSnapshot], None] | None = None,
+    progress_every: int = 10,
+) -> list[DraftSolution]:
     balancer = NSGA2Balancer(request)
-    return balancer.run()
+    return balancer.run(
+        progress_callback=progress_callback,
+        progress_every=progress_every,
+    )
 
 
 __all__ = [

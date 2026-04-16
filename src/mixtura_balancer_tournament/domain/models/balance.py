@@ -64,3 +64,20 @@ class DraftBalances(BaseModel):
     draft_id: UUID
     balances: list[Balance]
     created_at: datetime.datetime
+
+
+class ProgressMetricSummary(BaseModel):
+    min_value: float = 0.0
+    avg_value: float = 0.0
+    max_value: float = 0.0
+
+
+class BalanceProgress(BaseModel):
+    draft_id: UUID
+    processed_generations: int
+    total_generations: int
+    pareto_front_size: int
+    fitness_balance: ProgressMetricSummary
+    fitness_priority: ProgressMetricSummary
+    fitness_role_imbalance: ProgressMetricSummary
+    fitness_subrole: ProgressMetricSummary

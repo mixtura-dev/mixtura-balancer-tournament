@@ -10,6 +10,7 @@
 - Run the service from the root with `uv run faststream run mixtura_balancer_tournament:app`.
 - Run focused tests for the C++ package with `uv run --directory nsga_balancer pytest tests/test_models.py`.
 - The only configured lint/test tooling in repo config lives under `nsga_balancer/`: `pytest` and `ruff` are configured there, not at the root.
+- Fore reinstalling c++ module use `uv sync --force-reinstall`
 
 ## Environment And Runtime
 - The service subscribes to RabbitMQ queue `mix_balance_service.balance`.

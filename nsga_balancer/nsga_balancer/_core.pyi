@@ -3,6 +3,7 @@
 NSGA Balancer - C++ module type stubs.
 """
 
+from collections.abc import Callable
 from typing import Iterator, overload
 
 class PlayerRoleInfo:
@@ -97,6 +98,26 @@ class DraftSolution:
     def __init__(self) -> None: ...
     def __repr__(self) -> str: ...
 
+class MetricSummary:
+    min_value: float
+    avg_value: float
+    max_value: float
+
+    def __init__(self) -> None: ...
+    def __repr__(self) -> str: ...
+
+class ProgressSnapshot:
+    generation: int
+    total_generations: int
+    pareto_front_size: int
+    fitness_balance: MetricSummary
+    fitness_priority: MetricSummary
+    fitness_role_imbalance: MetricSummary
+    fitness_subrole: MetricSummary
+
+    def __init__(self) -> None: ...
+    def __repr__(self) -> str: ...
+
 class NSGA2Engine:
     def __init__(
         self,
@@ -111,7 +132,12 @@ class NSGA2Engine:
         """
         ...
 
-    def run(self, players: list[PlayerInfo]) -> list[DraftSolution]:
+    def run(
+        self,
+        players: list[PlayerInfo],
+        progress_callback: Callable[[ProgressSnapshot], None] | None = ...,
+        progress_every: int = ...,
+    ) -> list[DraftSolution]:
         """
         Run NSGA-II optimization.
 

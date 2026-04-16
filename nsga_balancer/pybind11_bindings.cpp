@@ -151,6 +151,32 @@ PYBIND11_MODULE(_core, m)
                    ", teams=" + std::to_string(s.teams.size()) + ")";
         });
 
+    py::class_<MetricSummary>(m, "MetricSummary")
+        .def(py::init<>())
+        .def_readwrite("min_value", &MetricSummary::min_value)
+        .def_readwrite("avg_value", &MetricSummary::avg_value)
+        .def_readwrite("max_value", &MetricSummary::max_value)
+        .def("__repr__", [](const MetricSummary& s) {
+            return "MetricSummary(min=" + std::to_string(s.min_value) +
+                   ", avg=" + std::to_string(s.avg_value) +
+                   ", max=" + std::to_string(s.max_value) + ")";
+        });
+
+    py::class_<ProgressSnapshot>(m, "ProgressSnapshot")
+        .def(py::init<>())
+        .def_readwrite("generation", &ProgressSnapshot::generation)
+        .def_readwrite("total_generations", &ProgressSnapshot::total_generations)
+        .def_readwrite("pareto_front_size", &ProgressSnapshot::pareto_front_size)
+        .def_readwrite("fitness_balance", &ProgressSnapshot::fitness_balance)
+        .def_readwrite("fitness_priority", &ProgressSnapshot::fitness_priority)
+        .def_readwrite("fitness_role_imbalance", &ProgressSnapshot::fitness_role_imbalance)
+        .def_readwrite("fitness_subrole", &ProgressSnapshot::fitness_subrole)
+        .def("__repr__", [](const ProgressSnapshot& s) {
+            return "ProgressSnapshot(generation=" + std::to_string(s.generation) +
+                   ", total=" + std::to_string(s.total_generations) +
+                   ", pareto_front_size=" + std::to_string(s.pareto_front_size) + ")";
+        });
+
     // ==================== NSGA2Engine ====================
     py::class_<NSGA2Engine>(m, "NSGA2Engine")
         .def(py::init<const NSGASettings&,
@@ -173,17 +199,32 @@ PYBIND11_MODULE(_core, m)
                     players_in_team: Number of players per team
                     engine_settings: EngineSettings for threading and seed
              )doc")
-        .def("run", &NSGA2Engine::run,
+        .def("run",
+             [](NSGA2Engine& engine,
+                const std::vector<PlayerInfo>& players,
+                py::object progress_callback,
+                int progress_every) {
+                 std::function<void(const ProgressSnapshot&)> cpp_callback;
+                 if (!progress_callback.is_none()) {
+                     cpp_callback = progress_callback.cast<std::function<void(const ProgressSnapshot&)>>();
+                 }
+
+                 py::gil_scoped_release release;
+                 return engine.run(players, cpp_callback, progress_every);
+             },
              py::arg("players"),
-             py::call_guard<py::gil_scoped_release>(),
+             py::arg("progress_callback") = py::none(),
+             py::arg("progress_every") = 1,
              R"doc(
-                Run NSGA-II optimization.
-                
-                Args:
-                    players: List of PlayerInfo objects
-                
-                Returns:
-                    List of DraftSolution from Pareto front
+                 Run NSGA-II optimization.
+                 
+                 Args:
+                     players: List of PlayerInfo objects
+                     progress_callback: Optional callable accepting ProgressSnapshot
+                     progress_every: Report progress every N generations
+                 
+                 Returns:
+                     List of DraftSolution from Pareto front
              )doc")
         .def_property_readonly("nsga_settings", &NSGA2Engine::nsga_settings)
         .def_property_readonly("engine_settings", &NSGA2Engine::engine_settings)

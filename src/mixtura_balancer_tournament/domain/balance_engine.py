@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import logging
+from collections.abc import Awaitable, Callable
 from uuid import uuid4
 
 from nsga_balancer.models import (
@@ -18,6 +19,7 @@ from nsga_balancer.models import (
 from nsga_balancer.models import (
     PlayerRole as NSGAPlayerRole,
 )
+from nsga_balancer.models import ProgressSnapshot as NSGAProgressSnapshot
 from nsga_balancer.models import QualitySettings
 from nsga_balancer.models import (
     RoleSettings as NSGARoleSettings,
@@ -28,7 +30,15 @@ from nsga_balancer.models import (
 
 from nsga_balancer import balance_teams_nsga, evaluate_solutions
 
-from .models.balance import Balance, DraftBalances, QualityMetrics, Team, TeamPlayer
+from .models.balance import (
+    Balance,
+    BalanceProgress,
+    DraftBalances,
+    ProgressMetricSummary,
+    QualityMetrics,
+    Team,
+    TeamPlayer,
+)
 from .models.balance_request import BalanceRequest, MathSettings
 
 logger = logging.getLogger(__name__)
@@ -39,7 +49,10 @@ class AsyncBalanceEngine:
         self._initialized = False
 
     async def find_balances_async(
-        self, balance_request: BalanceRequest
+        self,
+        balance_request: BalanceRequest,
+        progress_callback: Callable[[BalanceProgress], Awaitable[None]] | None = None,
+        progress_every: int = 10,
     ) -> DraftBalances:
         logger.info(
             f"Processing balance request for draft_id={balance_request.draft_id} "
@@ -48,9 +61,19 @@ class AsyncBalanceEngine:
 
         nsga_request = self._convert_request(balance_request)
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
+        nsga_progress_callback = self._create_progress_callback(
+            balance_request.draft_id,
+            loop,
+            progress_callback,
+        )
         solutions = await loop.run_in_executor(
-            None, lambda: balance_teams_nsga(nsga_request)
+            None,
+            lambda: balance_teams_nsga(
+                nsga_request,
+                progress_callback=nsga_progress_callback,
+                progress_every=progress_every,
+            ),
         )
 
         role_ids = list(balance_request.balance_settings.roles.keys())
@@ -124,6 +147,51 @@ class AsyncBalanceEngine:
             balances=balances,
             created_at=datetime.datetime.now(datetime.timezone.utc),
         )
+
+    def _convert_progress_snapshot(
+        self,
+        draft_id,
+        snapshot: NSGAProgressSnapshot,
+    ) -> BalanceProgress:
+        def convert_metric(metric) -> ProgressMetricSummary:
+            return ProgressMetricSummary(
+                min_value=metric.min_value,
+                avg_value=metric.avg_value,
+                max_value=metric.max_value,
+            )
+
+        return BalanceProgress(
+            draft_id=draft_id,
+            processed_generations=snapshot.generation,
+            total_generations=snapshot.total_generations,
+            pareto_front_size=snapshot.pareto_front_size,
+            fitness_balance=convert_metric(snapshot.fitness_balance),
+            fitness_priority=convert_metric(snapshot.fitness_priority),
+            fitness_role_imbalance=convert_metric(snapshot.fitness_role_imbalance),
+            fitness_subrole=convert_metric(snapshot.fitness_subrole),
+        )
+
+    def _create_progress_callback(
+        self,
+        draft_id,
+        loop: asyncio.AbstractEventLoop,
+        progress_callback: Callable[[BalanceProgress], Awaitable[None]] | None,
+    ) -> Callable[[NSGAProgressSnapshot], None] | None:
+        if progress_callback is None:
+            return None
+
+        def report_progress(snapshot: NSGAProgressSnapshot) -> None:
+            progress = self._convert_progress_snapshot(draft_id, snapshot)
+            future = asyncio.run_coroutine_threadsafe(progress_callback(progress), loop)
+
+            def log_publish_error(done_future) -> None:
+                exc = done_future.exception()
+                if exc is not None:
+                    logger.exception("Failed to publish balance progress", exc_info=exc)
+
+            future.add_done_callback(log_publish_error)
+
+        return report_progress
 
     def _convert_request(self, request: BalanceRequest) -> NSGABalanceRequest:
         role_subrole_ids = {

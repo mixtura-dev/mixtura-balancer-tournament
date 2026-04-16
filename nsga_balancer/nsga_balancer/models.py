@@ -116,6 +116,24 @@ class QualityMetrics:
 
 
 @dataclass
+class MetricSummary:
+    min_value: float = 0.0
+    avg_value: float = 0.0
+    max_value: float = 0.0
+
+
+@dataclass
+class ProgressSnapshot:
+    generation: int
+    total_generations: int
+    pareto_front_size: int
+    fitness_balance: MetricSummary
+    fitness_priority: MetricSummary
+    fitness_role_imbalance: MetricSummary
+    fitness_subrole: MetricSummary
+
+
+@dataclass
 class AssignedPlayer:
     member_id: uuid.UUID
     role_id: uuid.UUID
@@ -159,9 +177,11 @@ __all__ = [
     "DraftSolution",
     "EngineSettings",
     "MathSettings",
+    "MetricSummary",
     "NSGASettings",
     "Player",
     "PlayerRole",
+    "ProgressSnapshot",
     "QualityMetrics",
     "QualitySettings",
     "RoleSettings",
