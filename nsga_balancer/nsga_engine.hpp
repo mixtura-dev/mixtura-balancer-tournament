@@ -74,10 +74,8 @@ struct NSGASettings {
     float team_spread_blend = 0.1f;
     float subrole_blend = 0.1f;
 
-    float penalty_invalid_role = 10000.0f;
-    float penalty_prio_1 = 10.0f;
-    float penalty_prio_2 = 3.0f;
-    float penalty_prio_3 = 0.0f;
+    int max_priority = 3;
+    float priority_power_coef = 2.0f;
 };
 
 struct EngineSettings {
@@ -178,6 +176,8 @@ private:
     std::mt19937 rng_;
 
     void build_matrices(const std::vector<PlayerInfo>& players);
+    void build_priority_penalties();
+    float priority_penalty_for(int priority) const;
 
     std::vector<int> generate_individual();
 

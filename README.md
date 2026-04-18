@@ -83,19 +83,24 @@ BalanceRequest(
         Player(
             member_id="uuid",
             roles={
-                "role_id": PlayerRole(rating=1500, priority=1)
+                "role_id": PlayerRole(rating=1500, priority=3)
             }
         )
     ],
     balance_settings=BalanceSettings(
         players_in_team=5,
         roles={"tank": RoleSettings(count_in_team=1), ...},
-        math=MathSettings(
+        priority=PrioritySettings(
+            max_priority=3,
+            power_coef=2.0,
+        ),
+        balancing=BalancingSettings(
             population_size=300,
             generations=100,
             num_pareto_solutions=50,
             ...
-        )
+        ),
+        ranking=RankingSettings(...),
     )
 )
 ```

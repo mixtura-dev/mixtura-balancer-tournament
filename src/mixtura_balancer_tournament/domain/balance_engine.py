@@ -39,7 +39,11 @@ from .models.balance import (
     Team,
     TeamPlayer,
 )
-from .models.balance_request import BalanceRequest, MathSettings
+from .models.balance_request import (
+    BalanceRequest,
+    PrioritySettings,
+    RankingSettings,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +86,8 @@ class AsyncBalanceEngine:
             for k, v in balance_request.balance_settings.roles.items()
         }
         quality_settings = self._convert_quality_settings(
-            balance_request.balance_settings.math
+            balance_request.balance_settings.ranking,
+            balance_request.balance_settings.priority,
         )
 
         solutions = evaluate_solutions(
@@ -123,12 +128,8 @@ class AsyncBalanceEngine:
                 fitness_role_imbalance=sol.fitness_role_imbalance
                 if sol.quality
                 else 0.0,
-                fitness_team_spread=sol.fitness_team_spread
-                if sol.quality
-                else 0.0,
-                fitness_subrole=sol.fitness_subrole
-                if sol.quality
-                else 0.0,
+                fitness_team_spread=sol.fitness_team_spread if sol.quality else 0.0,
+                fitness_subrole=sol.fitness_subrole if sol.quality else 0.0,
                 role_subrole_penalty=sol.quality.role_subrole_penalty
                 if sol.quality
                 else 0.0,
@@ -233,17 +234,15 @@ class AsyncBalanceEngine:
         }
 
         math_settings = NSGAMathSettings(
-            population_size=request.balance_settings.math.population_size,
-            generations=request.balance_settings.math.generations,
-            num_pareto_solutions=request.balance_settings.math.num_pareto_solutions,
-            weight_team_variance=request.balance_settings.math.weight_team_variance,
-            role_imbalance_blend=request.balance_settings.math.role_imbalance_blend,
-            team_spread_blend=request.balance_settings.math.team_spread_blend,
-            subrole_blend=request.balance_settings.math.subrole_blend,
-            penalty_invalid_role=request.balance_settings.math.penalty_invalid_role,
-            penalty_prio_1=request.balance_settings.math.penalty_prio_1,
-            penalty_prio_2=request.balance_settings.math.penalty_prio_2,
-            penalty_prio_3=request.balance_settings.math.penalty_prio_3,
+            population_size=request.balance_settings.balancing.population_size,
+            generations=request.balance_settings.balancing.generations,
+            num_pareto_solutions=request.balance_settings.balancing.num_pareto_solutions,
+            weight_team_variance=request.balance_settings.balancing.weight_team_variance,
+            role_imbalance_blend=request.balance_settings.balancing.role_imbalance_blend,
+            team_spread_blend=request.balance_settings.balancing.team_spread_blend,
+            subrole_blend=request.balance_settings.balancing.subrole_blend,
+            max_priority=request.balance_settings.priority.max_priority,
+            priority_power_coef=request.balance_settings.priority.power_coef,
         )
 
         balance_settings = NSGABalanceSettings(
@@ -258,16 +257,22 @@ class AsyncBalanceEngine:
             balance_settings=balance_settings,
         )
 
-    def _convert_quality_settings(self, math_settings: MathSettings) -> QualitySettings:
+    def _convert_quality_settings(
+        self,
+        ranking_settings: RankingSettings,
+        priority_settings: PrioritySettings,
+    ) -> QualitySettings:
         return QualitySettings(
-            fairness_coef=math_settings.fairness_coef,
-            role_fairness_coef=math_settings.role_fairness_coef,
-            role_priority_coef=math_settings.role_priority_coef,
-            subrole_penalty_coef=math_settings.subrole_penalty_coef,
-            role_priority_imbalance_coef=math_settings.role_priority_imbalance_coef,
-            fairness_power_coef=math_settings.fairness_power_coef,
-            uniformity_power_coef=math_settings.uniformity_power_coef,
-            role_priority_imbalance_threshold=math_settings.role_priority_imbalance_threshold,
+            max_priority=priority_settings.max_priority,
+            fairness_coef=ranking_settings.fairness_coef,
+            role_fairness_coef=ranking_settings.role_fairness_coef,
+            role_priority_coef=ranking_settings.role_priority_coef,
+            subrole_penalty_coef=ranking_settings.subrole_penalty_coef,
+            role_priority_imbalance_coef=ranking_settings.role_priority_imbalance_coef,
+            fairness_power_coef=ranking_settings.fairness_power_coef,
+            uniformity_power_coef=ranking_settings.uniformity_power_coef,
+            role_priority_imbalance_threshold=ranking_settings.role_priority_imbalance_threshold,
+            priority_power_coef=priority_settings.power_coef,
         )
 
 

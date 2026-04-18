@@ -1,10 +1,12 @@
 from .balance import Balance, DraftBalances, QualityMetrics, Team, TeamPlayer
 from .balance_request import (
+    BalancingSettings,
     BalanceRequest,
     BalanceSettings,
-    MathSettings,
     Player,
     PlayerRole,
+    PrioritySettings,
+    RankingSettings,
     RoleSettings,
     SubroleSettings,
 )
@@ -15,11 +17,13 @@ __all__ = [
     "QualityMetrics",
     "Team",
     "TeamPlayer",
+    "BalancingSettings",
     "BalanceRequest",
     "BalanceSettings",
-    "MathSettings",
     "Player",
     "PlayerRole",
+    "PrioritySettings",
+    "RankingSettings",
     "RoleSettings",
     "SubroleSettings",
 ]

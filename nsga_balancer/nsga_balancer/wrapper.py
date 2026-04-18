@@ -91,10 +91,8 @@ class NSGA2Balancer:
         cpp_settings.role_imbalance_blend = settings.role_imbalance_blend
         cpp_settings.team_spread_blend = settings.team_spread_blend
         cpp_settings.subrole_blend = settings.subrole_blend
-        cpp_settings.penalty_invalid_role = settings.penalty_invalid_role
-        cpp_settings.penalty_prio_1 = settings.penalty_prio_1
-        cpp_settings.penalty_prio_2 = settings.penalty_prio_2
-        cpp_settings.penalty_prio_3 = settings.penalty_prio_3
+        cpp_settings.max_priority = settings.max_priority
+        cpp_settings.priority_power_coef = settings.priority_power_coef
         return cpp_settings
 
     def _convert_role_settings(

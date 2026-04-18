@@ -42,10 +42,8 @@ class MathSettings:
     role_imbalance_blend: float = 0.1
     team_spread_blend: float = 0.1
     subrole_blend: float = 0.1
-    penalty_invalid_role: float = 10000.0
-    penalty_prio_1: float = 10.0
-    penalty_prio_2: float = 3.0
-    penalty_prio_3: float = 0.0
+    max_priority: int = 3
+    priority_power_coef: float = 2.0
 
 
 @dataclass
@@ -78,10 +76,8 @@ class NSGASettings:
     role_imbalance_blend: float = 0.1
     team_spread_blend: float = 0.1
     subrole_blend: float = 0.1
-    penalty_invalid_role: float = 10000.0
-    penalty_prio_1: float = 10.0
-    penalty_prio_2: float = 3.0
-    penalty_prio_3: float = 0.0
+    max_priority: int = 3
+    priority_power_coef: float = 2.0
 
 
 @dataclass
@@ -95,6 +91,7 @@ class QualitySettings:
     fairness_power_coef: float = 2.0
     uniformity_power_coef: float = 2.0
     role_priority_imbalance_threshold: int = 1
+    priority_power_coef: float = 2.0
 
 
 @dataclass

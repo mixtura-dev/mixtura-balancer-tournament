@@ -13,11 +13,13 @@ from faststream.rabbit import RabbitBroker
 from mixtura_balancer_tournament.app.schemas import ResponseMessage
 from mixtura_balancer_tournament.domain.models.balance import DraftBalances
 from mixtura_balancer_tournament.domain.models.balance_request import (
+    BalancingSettings,
     BalanceRequest,
     BalanceSettings,
-    MathSettings,
     Player,
     PlayerRole,
+    PrioritySettings,
+    RankingSettings,
     RoleSettings,
     SubroleSettings,
 )
@@ -70,7 +72,12 @@ def create_test_request(num_teams: int = 4, players_per_team: int = 5) -> Balanc
         }
         players.append(Player(member_id=player_id, roles=roles))
 
-    math_settings = MathSettings(
+    priority_settings = PrioritySettings(
+        max_priority=3,
+        power_coef=2.0,
+    )
+    ranking_settings = RankingSettings()
+    balancing_settings = BalancingSettings(
         population_size=100,
         generations=50,
         num_pareto_solutions=10,
@@ -79,7 +86,9 @@ def create_test_request(num_teams: int = 4, players_per_team: int = 5) -> Balanc
     balance_settings = BalanceSettings(
         players_in_team=players_in_team,
         roles=roles_settings,
-        math=math_settings,
+        priority=priority_settings,
+        ranking=ranking_settings,
+        balancing=balancing_settings,
     )
 
     return BalanceRequest(

@@ -7,6 +7,8 @@
 
 namespace {
 
+constexpr float kInvalidRolePenalty = 1000000.0f;
+
 MetricSummary summarize_metric(
     const std::vector<int>& front,
     const std::vector<EvaluationResult>& evaluations,
@@ -123,6 +125,8 @@ NSGA2Engine::NSGA2Engine(
             role_subrole_capacities_[r_idx].push_back(std::max(0, capacity));
         }
     }
+
+    build_priority_penalties();
 }
 
 void NSGA2Engine::build_matrices(const std::vector<PlayerInfo>& players) {
@@ -166,12 +170,27 @@ void NSGA2Engine::build_matrices(const std::vector<PlayerInfo>& players) {
         }
     }
 
-    priority_penalties_ = {
-        nsga_settings_.penalty_invalid_role,
-        nsga_settings_.penalty_prio_1,
-        nsga_settings_.penalty_prio_2,
-        nsga_settings_.penalty_prio_3
-    };
+}
+
+void NSGA2Engine::build_priority_penalties() {
+    int max_priority = std::max(1, nsga_settings_.max_priority);
+    priority_penalties_.assign(max_priority + 1, 0.0f);
+    priority_penalties_[0] = kInvalidRolePenalty;
+
+    for (int priority = 1; priority <= max_priority; ++priority) {
+        float distance = static_cast<float>(max_priority - priority);
+        priority_penalties_[priority] = std::pow(distance, nsga_settings_.priority_power_coef);
+    }
+}
+
+float NSGA2Engine::priority_penalty_for(int priority) const {
+    if (priority <= 0) {
+        return priority_penalties_[0];
+    }
+
+    int max_priority = static_cast<int>(priority_penalties_.size()) - 1;
+    int clamped_priority = std::min(priority, max_priority);
+    return priority_penalties_[clamped_priority];
 }
 
 std::vector<int> NSGA2Engine::generate_individual() {
@@ -260,8 +279,7 @@ std::vector<EvaluationResult> NSGA2Engine::evaluate_population(
                 int p_idx = chrom[slot_idx];
                 int r_idx = team_slots_[s];
                 int prio = P_[p_idx][r_idx];
-                int prio_clamped = std::max(0, std::min(3, prio));
-                priority_penalty += priority_penalties_[prio_clamped];
+                priority_penalty += priority_penalty_for(prio);
             }
         }
         float fitness_priority = priority_penalty;
@@ -611,15 +629,9 @@ std::vector<int> NSGA2Engine::mutate(const std::vector<int>& parent) {
         int r1 = team_slots_[s1];
         int r2 = team_slots_[s2];
 
-        int cur_prio = 0;
-        int prio1 = std::max(0, std::min(3, P_[p1][r1]));
-        int prio2 = std::max(0, std::min(3, P_[p2][r2]));
-        cur_prio = static_cast<int>(priority_penalties_[prio1]) + static_cast<int>(priority_penalties_[prio2]);
+        float cur_prio = priority_penalty_for(P_[p1][r1]) + priority_penalty_for(P_[p2][r2]);
 
-        int new_prio = 0;
-        int new_prio1 = std::max(0, std::min(3, P_[p1][r2]));
-        int new_prio2 = std::max(0, std::min(3, P_[p2][r1]));
-        new_prio = static_cast<int>(priority_penalties_[new_prio1]) + static_cast<int>(priority_penalties_[new_prio2]);
+        float new_prio = priority_penalty_for(P_[p1][r2]) + priority_penalty_for(P_[p2][r1]);
 
         if (new_prio <= cur_prio) {
             std::swap(chrom[idx1], chrom[idx2]);

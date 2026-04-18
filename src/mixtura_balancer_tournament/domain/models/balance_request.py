@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class PlayerRole(BaseModel):
-    priority: int = Field(ge=0, description="Role priority for the player.")
+    priority: int = Field(ge=1, description="Role priority for the player. Higher values mean higher preference.")
     rating: int = Field(ge=0, description="Role rating for the player.")
     subrole_ids: list[UUID] | None = Field(
         default=None,
@@ -46,7 +46,18 @@ class RoleSettings(BaseModel):
             if "min_in_team" in data:
                 data.pop("min_in_team", None)
         return data
-class MathSettings(BaseModel):
+
+
+class PrioritySettings(BaseModel):
+    max_priority: int = Field(default=3, ge=1, description="Highest available role priority value.")
+    power_coef: float = Field(
+        default=2.0,
+        gt=0,
+        description="Exponent used to convert priority distance into penalty.",
+    )
+
+
+class RankingSettings(BaseModel):
     fairness_coef: float = Field(default=3.0, description="Weight for fairness metric.")
     role_fairness_coef: float = Field(default=1.0, description="Weight for role fairness metric.")
     role_priority_coef: float = Field(default=80.0, description="Weight for role priority metric.")
@@ -57,7 +68,9 @@ class MathSettings(BaseModel):
     fairness_power_coef: float = Field(default=2.0, ge=1, description="Power coefficient for fairness calculation.")
     uniformity_power_coef: float = Field(default=2.0, ge=1, description="Power coefficient for uniformity calculation.")
     role_priority_imbalance_threshold: int = Field(default=1, ge=0, description="Threshold for role-priority imbalance penalty.")
-    
+
+
+class BalancingSettings(BaseModel):
     population_size: int = Field(default=200, ge=1, description="NSGA-II population size.")
     generations: int = Field(default=1000, ge=1, description="NSGA-II generations count.")
     num_pareto_solutions: int = Field(default=50, ge=1, description="Number of selected solutions from the Pareto front.")
@@ -73,10 +86,6 @@ class MathSettings(BaseModel):
     subrole_blend: float = Field(
         default=0.1, ge=0, description="Blend coefficient for subrole penalty in the folded priority objective."
     )
-    penalty_invalid_role: float = Field(default=10000.0, description="Penalty for assigning an invalid role.")
-    penalty_prio_1: float = Field(default=10.0, description="Penalty for priority level 1.")
-    penalty_prio_2: float = Field(default=3.0, description="Penalty for priority level 2.")
-    penalty_prio_3: float = Field(default=0.0, description="Penalty for priority level 3.")
 
 
 class BalanceSettings(BaseModel):
@@ -84,7 +93,9 @@ class BalanceSettings(BaseModel):
     roles: dict[UUID, RoleSettings] = Field(
         default_factory=dict, description="Role settings: role UUID -> role settings."
     )
-    math: MathSettings = Field(default_factory=MathSettings, description="Math and optimization settings.")
+    priority: PrioritySettings = Field(default_factory=PrioritySettings, description="Global priority scoring settings.")
+    ranking: RankingSettings = Field(default_factory=RankingSettings, description="Solution ranking settings.")
+    balancing: BalancingSettings = Field(default_factory=BalancingSettings, description="Balancing optimizer settings.")
 
     @property
     def max_in_team(self) -> int:
@@ -96,6 +107,11 @@ class BalanceSettings(BaseModel):
         if isinstance(data, dict):
             if "max_in_team" in data and "players_in_team" not in data:
                 data["players_in_team"] = data.pop("max_in_team")
+            if "math" in data:
+                raise ValueError(
+                    "balance_settings.math is no longer supported. "
+                    "Use balance_settings.priority, balance_settings.ranking, and balance_settings.balancing instead."
+                )
         return data
 
     @model_validator(mode="after")
@@ -116,10 +132,18 @@ class BalanceRequest(BaseModel):
     @model_validator(mode="after")
     def validate_players_roles(self) -> "BalanceRequest":
         role_ids = set(self.balance_settings.roles.keys())
+        max_priority = self.balance_settings.priority.max_priority
+
         for player in self.players:
             for role_id, role_info in player.roles.items():
                 if role_id not in role_ids:
                     raise ValueError(f"Player {player.member_id} has undefined role {role_id}")
+
+                if role_info.priority > max_priority:
+                    raise ValueError(
+                        f"Player {player.member_id} has priority {role_info.priority} for role {role_id}, "
+                        f"but max_priority is {max_priority}"
+                    )
 
                 configured_subroles = set(self.balance_settings.roles[role_id].subroles.keys())
                 if not configured_subroles:

@@ -19,11 +19,12 @@ from mixtura_balancer_tournament.domain.models.balance import (
     ProgressMetricSummary,
 )
 from mixtura_balancer_tournament.domain.models.balance_request import (
+    BalancingSettings,
     BalanceRequest,
     BalanceSettings,
-    MathSettings,
     Player,
     PlayerRole,
+    PrioritySettings,
     RoleSettings,
     SubroleSettings,
 )
@@ -76,7 +77,11 @@ def make_balance_settings(
     return BalanceSettings(
         players_in_team=sum(ROLE_COUNTS.values()),
         roles=roles,
-        math=MathSettings(
+        priority=PrioritySettings(
+            max_priority=3,
+            power_coef=2.0,
+        ),
+        balancing=BalancingSettings(
             population_size=population_size,
             generations=generations,
             num_pareto_solutions=num_pareto_solutions,
@@ -257,7 +262,7 @@ def print_summary(
     print(f"Source players used: {len(request.players)}")
     print(f"Teams count: {teams_count}")
     print(f"Team format: {ROLE_COUNTS}")
-    print(f"team_spread_blend: {request.balance_settings.math.team_spread_blend}")
+    print(f"team_spread_blend: {request.balance_settings.balancing.team_spread_blend}")
     if dropped_players:
         print(f"Dropped extra players: {', '.join(dropped_players)}")
 

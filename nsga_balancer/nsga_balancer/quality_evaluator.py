@@ -17,6 +17,9 @@ if TYPE_CHECKING:
     from .models import DraftSolution
 
 
+INVALID_ROLE_PRIORITY_PENALTY = 1000000.0
+
+
 def calculate_p_norm(values: list[float], power: float) -> float:
     """Calculate p-norm of a list of values."""
     if power == 0:
@@ -28,6 +31,15 @@ def calculate_p_norm(values: list[float], power: float) -> float:
     
     sum_pow = sum(abs(v) ** power for v in values)
     return sum_pow ** (1.0 / power)
+
+
+def calculate_priority_penalty(priority: int, settings: QualitySettings) -> float:
+    """Convert a role priority into a penalty value."""
+    if priority <= 0:
+        return INVALID_ROLE_PRIORITY_PENALTY
+
+    distance = max(0, settings.max_priority - min(priority, settings.max_priority))
+    return float(distance) ** settings.priority_power_coef
 
 
 def dp_fairness(teams: list[Team], settings: QualitySettings) -> float:
@@ -170,20 +182,21 @@ def role_priority_points(teams: list[Team], settings: QualitySettings) -> float:
     """
     Calculate RolePriorityPoints - measures role assignment quality.
     
-    Lower priority values mean better role assignment (1 = main role).
-    Sum all priorities and add imbalance penalty if teams have unequal totals.
+    Higher priority values mean better role assignment (max_priority = main role).
+    Sum priority penalties and add imbalance penalty if teams have unequal totals.
     """
     if not teams:
         return 0.0
     
-    lost_points = 0
+    lost_points = 0.0
     team_points = []
     
     for team in teams:
-        team_lost = 0
+        team_lost = 0.0
         for player in team.players:
-            lost_points += settings.max_priority - player.priority
-            team_lost += settings.max_priority - player.priority
+            penalty = calculate_priority_penalty(player.priority, settings)
+            lost_points += penalty
+            team_lost += penalty
         team_points.append(team_lost)
     
     imbalance = 0
@@ -192,7 +205,7 @@ def role_priority_points(teams: list[Team], settings: QualitySettings) -> float:
         min_points = min(team_points)
         imbalance = max_points - min_points
     
-    total = float(lost_points)
+    total = lost_points
     if imbalance > settings.role_priority_imbalance_threshold:
         total += settings.role_priority_imbalance_coef * float(imbalance)
     
@@ -287,6 +300,7 @@ def rank_solutions(
 
 __all__ = [
     "calculate_p_norm",
+    "calculate_priority_penalty",
     "dp_fairness",
     "dp_role_fairness",
     "evaluate_solution",

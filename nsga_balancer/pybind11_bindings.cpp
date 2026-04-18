@@ -77,10 +77,8 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("role_imbalance_blend", &NSGASettings::role_imbalance_blend)
         .def_readwrite("team_spread_blend", &NSGASettings::team_spread_blend)
         .def_readwrite("subrole_blend", &NSGASettings::subrole_blend)
-        .def_readwrite("penalty_invalid_role", &NSGASettings::penalty_invalid_role)
-        .def_readwrite("penalty_prio_1", &NSGASettings::penalty_prio_1)
-        .def_readwrite("penalty_prio_2", &NSGASettings::penalty_prio_2)
-        .def_readwrite("penalty_prio_3", &NSGASettings::penalty_prio_3)
+        .def_readwrite("max_priority", &NSGASettings::max_priority)
+        .def_readwrite("priority_power_coef", &NSGASettings::priority_power_coef)
         .def("__repr__", [](const NSGASettings& s) {
             return "NSGASettings(pop=" + std::to_string(s.population_size) +
                    ", gens=" + std::to_string(s.generations) +
@@ -262,8 +260,7 @@ PYBIND11_MODULE(_core, m)
            float weight_team_variance, float role_imbalance_blend,
            float team_spread_blend,
            float subrole_blend,
-           float penalty_invalid_role, float penalty_prio_1,
-           float penalty_prio_2, float penalty_prio_3) {
+           int max_priority, float priority_power_coef) {
             NSGASettings s;
             s.population_size = population_size;
             s.generations = generations;
@@ -272,10 +269,8 @@ PYBIND11_MODULE(_core, m)
             s.role_imbalance_blend = role_imbalance_blend;
             s.team_spread_blend = team_spread_blend;
             s.subrole_blend = subrole_blend;
-            s.penalty_invalid_role = penalty_invalid_role;
-            s.penalty_prio_1 = penalty_prio_1;
-            s.penalty_prio_2 = penalty_prio_2;
-            s.penalty_prio_3 = penalty_prio_3;
+            s.max_priority = max_priority;
+            s.priority_power_coef = priority_power_coef;
             return s;
         },
         py::arg("population_size") = 200,
@@ -285,10 +280,8 @@ PYBIND11_MODULE(_core, m)
         py::arg("role_imbalance_blend") = 0.1f,
         py::arg("team_spread_blend") = 0.1f,
         py::arg("subrole_blend") = 0.1f,
-        py::arg("penalty_invalid_role") = 10000.0f,
-        py::arg("penalty_prio_1") = 10.0f,
-        py::arg("penalty_prio_2") = 3.0f,
-        py::arg("penalty_prio_3") = 0.0f,
+        py::arg("max_priority") = 3,
+        py::arg("priority_power_coef") = 2.0f,
         "Create NSGASettings with all parameters");
 
     m.def("create_role_settings",
