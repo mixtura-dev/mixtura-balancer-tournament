@@ -34,6 +34,26 @@ MetricSummary summarize_metric(
     return summary;
 }
 
+float calculate_std(const std::vector<float>& values) {
+    if (values.size() <= 1) {
+        return 0.0f;
+    }
+
+    float mean = 0.0f;
+    for (float value : values) {
+        mean += value;
+    }
+    mean /= static_cast<float>(values.size());
+
+    float variance_sum = 0.0f;
+    for (float value : values) {
+        float diff = value - mean;
+        variance_sum += diff * diff;
+    }
+
+    return std::sqrt(variance_sum / static_cast<float>(values.size()));
+}
+
 }  // namespace
 
 NSGA2Engine::NSGA2Engine(
@@ -202,60 +222,35 @@ std::vector<EvaluationResult> NSGA2Engine::evaluate_population(
     for (int ind = 0; ind < pop_size; ++ind) {
         const auto& chrom = population[ind];
 
-        // Team ratings
         std::vector<float> team_ratings(num_teams_, 0.0f);
-        for (int t = 0; t < num_teams_; ++t) {
-            for (int s = 0; s < players_in_team_; ++s) {
-                int slot_idx = t * players_in_team_ + s;
-                int p_idx = chrom[slot_idx];
-                int r_idx = team_slots_[s];
-                team_ratings[t] += static_cast<float>(R_[p_idx][r_idx]);
-            }
-        }
-
+        std::vector<float> team_player_stds(num_teams_, 0.0f);
         float role_imbalance_sum = 0.0f;
+
         for (int t = 0; t < num_teams_; ++t) {
             std::vector<float> team_role_sums(num_roles_, 0.0f);
+            std::vector<float> player_ratings;
+            player_ratings.reserve(players_in_team_);
+
             for (int s = 0; s < players_in_team_; ++s) {
                 int slot_idx = t * players_in_team_ + s;
                 int p_idx = chrom[slot_idx];
                 int r_idx = team_slots_[s];
-                team_role_sums[r_idx] += static_cast<float>(R_[p_idx][r_idx]);
+
+                float rating = static_cast<float>(R_[p_idx][r_idx]);
+                team_ratings[t] += rating;
+                team_role_sums[r_idx] += rating;
+                player_ratings.push_back(rating);
             }
 
-            float mean = 0.0f;
-            for (float role_sum : team_role_sums) {
-                mean += role_sum;
-            }
-            mean /= static_cast<float>(num_roles_);
-
-            float variance = 0.0f;
-            for (float role_sum : team_role_sums) {
-                float diff = role_sum - mean;
-                variance += diff * diff;
-            }
-            variance /= static_cast<float>(num_roles_);
-            role_imbalance_sum += std::sqrt(variance);
+            role_imbalance_sum += calculate_std(team_role_sums);
+            team_player_stds[t] = calculate_std(player_ratings);
         }
 
-        float team_max = team_ratings[0];
-        float team_min = team_ratings[0];
-        float team_mean = 0.0f;
-        for (float r : team_ratings) {
-            if (r > team_max) team_max = r;
-            if (r < team_min) team_min = r;
-            team_mean += r;
-        }
-        team_mean /= static_cast<float>(num_teams_);
+        auto [team_min_it, team_max_it] = std::minmax_element(team_ratings.begin(), team_ratings.end());
+        float team_std = calculate_std(team_ratings);
+        float team_spread_std = calculate_std(team_player_stds);
 
-        float team_variance_sum = 0.0f;
-        for (float r : team_ratings) {
-            float diff = r - team_mean;
-            team_variance_sum += diff * diff;
-        }
-        float team_std = std::sqrt(team_variance_sum / static_cast<float>(num_teams_));
-
-        float fitness_balance = nsga_settings_.weight_team_variance * ((team_max - team_min) + team_std);
+        float fitness_balance = nsga_settings_.weight_team_variance * ((*team_max_it - *team_min_it) + team_std);
 
         // Priority penalties
         float priority_penalty = 0.0f;
@@ -285,8 +280,13 @@ std::vector<EvaluationResult> NSGA2Engine::evaluate_population(
         evaluations[ind].fitness_balance = fitness_balance;
         evaluations[ind].fitness_priority = fitness_priority;
         evaluations[ind].fitness_role_imbalance = role_imbalance_sum;
+        evaluations[ind].fitness_team_spread = team_spread_std;
         evaluations[ind].fitness_subrole = subrole_penalty;
-        evaluations[ind].objectives[0] = fitness_balance + nsga_settings_.role_imbalance_blend * role_imbalance_sum;
+        // Penalize drafts where teams have very different internal rating spread.
+        evaluations[ind].objectives[0] =
+            fitness_balance
+            + nsga_settings_.role_imbalance_blend * role_imbalance_sum
+            + nsga_settings_.team_spread_blend * team_spread_std;
         evaluations[ind].objectives[1] = fitness_priority + nsga_settings_.subrole_blend * subrole_penalty;
     }
 
@@ -650,6 +650,7 @@ std::vector<DraftSolution> NSGA2Engine::decode_results(
         sol.fitness_balance = evaluations[sol_id].fitness_balance;
         sol.fitness_priority = evaluations[sol_id].fitness_priority;
         sol.fitness_role_imbalance = evaluations[sol_id].fitness_role_imbalance;
+        sol.fitness_team_spread = evaluations[sol_id].fitness_team_spread;
         sol.fitness_subrole = evaluations[sol_id].fitness_subrole;
 
         sol.teams.resize(num_teams_);
@@ -704,6 +705,11 @@ ProgressSnapshot NSGA2Engine::build_progress_snapshot(
         pareto_front,
         evaluations,
         &EvaluationResult::fitness_role_imbalance
+    );
+    snapshot.fitness_team_spread = summarize_metric(
+        pareto_front,
+        evaluations,
+        &EvaluationResult::fitness_team_spread
     );
     snapshot.fitness_subrole = summarize_metric(
         pareto_front,
@@ -830,14 +836,21 @@ std::vector<DraftSolution> NSGA2Engine::run(
 
     // Filter duplicates
     std::vector<int> unique_front;
-    std::set<std::tuple<float, float, float, float>> seen_fitness;
+    std::set<std::tuple<float, float, float, float, float>> seen_fitness;
 
     for (int idx : pareto_front) {
         float fit_balance = std::round(evaluations[idx].fitness_balance * 10000.0f) / 10000.0f;
         float fit_priority = std::round(evaluations[idx].fitness_priority * 10000.0f) / 10000.0f;
         float fit_role_imbalance = std::round(evaluations[idx].fitness_role_imbalance * 10000.0f) / 10000.0f;
+        float fit_team_spread = std::round(evaluations[idx].fitness_team_spread * 10000.0f) / 10000.0f;
         float fit_subrole = std::round(evaluations[idx].fitness_subrole * 10000.0f) / 10000.0f;
-        auto fit_tuple = std::make_tuple(fit_balance, fit_priority, fit_role_imbalance, fit_subrole);
+        auto fit_tuple = std::make_tuple(
+            fit_balance,
+            fit_priority,
+            fit_role_imbalance,
+            fit_team_spread,
+            fit_subrole
+        );
 
         if (seen_fitness.find(fit_tuple) == seen_fitness.end()) {
             seen_fitness.insert(fit_tuple);

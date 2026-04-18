@@ -32,7 +32,7 @@ broker = RabbitBroker(
 router = RabbitRouter()
 
 
-@router.subscriber("mix_balance_service.balance")
+@router.subscriber("tournament_balance_service.balance")
 async def balance_handler(
     message: BalanceRequest
 ) -> ResponseMessage[DraftBalances | ErrorResponse]:

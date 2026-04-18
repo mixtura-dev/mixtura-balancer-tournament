@@ -59,6 +59,7 @@ def make_balance_settings(
     population_size: int,
     generations: int,
     num_pareto_solutions: int,
+    team_spread_blend: float,
 ) -> BalanceSettings:
     roles = {}
     for role_name in ROLE_NAMES:
@@ -79,6 +80,7 @@ def make_balance_settings(
             population_size=population_size,
             generations=generations,
             num_pareto_solutions=num_pareto_solutions,
+            team_spread_blend=team_spread_blend,
         ),
     )
 
@@ -106,6 +108,7 @@ def build_request(
     population_size: int,
     generations: int,
     num_pareto_solutions: int,
+    team_spread_blend: float,
     trim_extra_players: bool,
 ) -> tuple[BalanceRequest, dict[uuid.UUID, str], list[str]]:
     source = json.loads(path.read_text(encoding="utf-8"))
@@ -158,6 +161,7 @@ def build_request(
                 population_size=population_size,
                 generations=generations,
                 num_pareto_solutions=num_pareto_solutions,
+                team_spread_blend=team_spread_blend,
             ),
         ),
         player_names,
@@ -214,6 +218,7 @@ async def _print_progress_update(progress: BalanceProgress) -> None:
         f"balance[{_format_metric_summary(progress.fitness_balance)}], "
         f"priority[{_format_metric_summary(progress.fitness_priority)}], "
         f"role_imbalance[{_format_metric_summary(progress.fitness_role_imbalance)}], "
+        f"team_spread[{_format_metric_summary(progress.fitness_team_spread)}], "
         f"subrole[{_format_metric_summary(progress.fitness_subrole)}]"
     )
 
@@ -252,6 +257,7 @@ def print_summary(
     print(f"Source players used: {len(request.players)}")
     print(f"Teams count: {teams_count}")
     print(f"Team format: {ROLE_COUNTS}")
+    print(f"team_spread_blend: {request.balance_settings.math.team_spread_blend}")
     if dropped_players:
         print(f"Dropped extra players: {', '.join(dropped_players)}")
 
@@ -305,6 +311,7 @@ def print_result(
             f"fitness_balance={balance.quality.fitness_balance:.3f}, "
             f"fitness_priority={balance.quality.fitness_priority:.3f}, "
             f"fitness_role_imbalance={balance.quality.fitness_role_imbalance:.3f}, "
+            f"fitness_team_spread={balance.quality.fitness_team_spread:.3f}, "
             f"fitness_subrole={balance.quality.fitness_subrole:.3f}"
         )
 
@@ -332,6 +339,7 @@ def print_result(
             f"offroles={count_offroles(balance)}, "
             f"team_spread={team_rating_spread(balance)}, "
             f"fitness_role_imbalance={balance.quality.fitness_role_imbalance:.3f}, "
+            f"fitness_team_spread={balance.quality.fitness_team_spread:.3f}, "
             f"fitness_subrole={balance.quality.fitness_subrole:.3f}"
         )
 
@@ -371,6 +379,12 @@ def parse_args() -> argparse.Namespace:
         help="How many Pareto solutions to keep.",
     )
     parser.add_argument(
+        "--team-spread-blend",
+        type=float,
+        default=0.1,
+        help="Blend coefficient for the per-team player spread term in the first objective.",
+    )
+    parser.add_argument(
         "--print-balances",
         type=int,
         default=1,
@@ -391,6 +405,7 @@ async def main() -> None:
         population_size=args.population_size,
         generations=args.generations,
         num_pareto_solutions=args.num_pareto_solutions,
+        team_spread_blend=args.team_spread_blend,
         trim_extra_players=not args.no_trim_extra_players,
     )
 

@@ -40,6 +40,7 @@ class MathSettings:
     num_pareto_solutions: int = 50
     weight_team_variance: float = 1.0
     role_imbalance_blend: float = 0.1
+    team_spread_blend: float = 0.1
     subrole_blend: float = 0.1
     penalty_invalid_role: float = 10000.0
     penalty_prio_1: float = 10.0
@@ -75,6 +76,7 @@ class NSGASettings:
     num_pareto_solutions: int = 50
     weight_team_variance: float = 1.0
     role_imbalance_blend: float = 0.1
+    team_spread_blend: float = 0.1
     subrole_blend: float = 0.1
     penalty_invalid_role: float = 10000.0
     penalty_prio_1: float = 10.0
@@ -130,6 +132,7 @@ class ProgressSnapshot:
     fitness_balance: MetricSummary
     fitness_priority: MetricSummary
     fitness_role_imbalance: MetricSummary
+    fitness_team_spread: MetricSummary
     fitness_subrole: MetricSummary
 
 
@@ -154,6 +157,7 @@ class DraftSolution:
     fitness_balance: float
     fitness_priority: float
     fitness_role_imbalance: float = 0.0
+    fitness_team_spread: float = 0.0
     fitness_subrole: float = 0.0
     quality: QualityMetrics | None = None
     teams: list[Team] = field(default_factory=list)
@@ -166,6 +170,7 @@ class DraftSolution:
             self.fitness_balance
             + self.fitness_priority
             + self.fitness_role_imbalance
+            + self.fitness_team_spread
             + self.fitness_subrole
         )
 

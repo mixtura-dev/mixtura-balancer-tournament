@@ -71,6 +71,7 @@ struct NSGASettings {
 
     float weight_team_variance = 1.0f;
     float role_imbalance_blend = 0.1f;
+    float team_spread_blend = 0.1f;
     float subrole_blend = 0.1f;
 
     float penalty_invalid_role = 10000.0f;
@@ -103,6 +104,7 @@ struct DraftSolution {
     float fitness_balance;
     float fitness_priority;
     float fitness_role_imbalance;
+    float fitness_team_spread;
     float fitness_subrole;
     std::vector<TeamResult> teams;
 };
@@ -112,6 +114,7 @@ struct EvaluationResult {
     float fitness_balance;
     float fitness_priority;
     float fitness_role_imbalance;
+    float fitness_team_spread;
     float fitness_subrole;
 };
 
@@ -128,6 +131,7 @@ struct ProgressSnapshot {
     MetricSummary fitness_balance;
     MetricSummary fitness_priority;
     MetricSummary fitness_role_imbalance;
+    MetricSummary fitness_team_spread;
     MetricSummary fitness_subrole;
 };
 

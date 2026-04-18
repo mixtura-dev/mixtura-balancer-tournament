@@ -12,6 +12,7 @@ class QualityMetrics(BaseModel):
     fitness_balance: float = 0.0
     fitness_priority: float = 0.0
     fitness_role_imbalance: float = 0.0
+    fitness_team_spread: float = 0.0
     fitness_subrole: float = 0.0
     role_subrole_penalty: float = 0.0
     evaluation: float = 0.0
@@ -80,4 +81,5 @@ class BalanceProgress(BaseModel):
     fitness_balance: ProgressMetricSummary
     fitness_priority: ProgressMetricSummary
     fitness_role_imbalance: ProgressMetricSummary
+    fitness_team_spread: ProgressMetricSummary
     fitness_subrole: ProgressMetricSummary

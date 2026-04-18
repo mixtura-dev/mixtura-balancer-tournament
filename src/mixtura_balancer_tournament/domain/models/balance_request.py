@@ -65,6 +65,11 @@ class MathSettings(BaseModel):
     role_imbalance_blend: float = Field(
         default=0.1, ge=0, description="Blend coefficient for role imbalance in the folded balance objective."
     )
+    team_spread_blend: float = Field(
+        default=0.1,
+        ge=0,
+        description="Blend coefficient for per-team player spread variance in the folded balance objective.",
+    )
     subrole_blend: float = Field(
         default=0.1, ge=0, description="Blend coefficient for subrole penalty in the folded priority objective."
     )
