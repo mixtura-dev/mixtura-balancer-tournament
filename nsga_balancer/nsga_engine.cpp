@@ -265,6 +265,8 @@ std::vector<EvaluationResult> NSGA2Engine::evaluate_population(
             team_player_stds[t] = calculate_std(player_ratings);
         }
 
+        float role_imbalance_avg = role_imbalance_sum / num_teams_;
+
         auto [team_min_it, team_max_it] = std::minmax_element(team_ratings.begin(), team_ratings.end());
         float team_std = calculate_std(team_ratings);
         float team_spread_std = calculate_std(team_player_stds);
@@ -297,13 +299,12 @@ std::vector<EvaluationResult> NSGA2Engine::evaluate_population(
         }
         evaluations[ind].fitness_balance = fitness_balance;
         evaluations[ind].fitness_priority = fitness_priority;
-        evaluations[ind].fitness_role_imbalance = role_imbalance_sum;
+        evaluations[ind].fitness_role_imbalance = role_imbalance_avg;
         evaluations[ind].fitness_team_spread = team_spread_std;
         evaluations[ind].fitness_subrole = subrole_penalty;
-        // Penalize drafts where teams have very different internal rating spread.
         evaluations[ind].objectives[0] =
             fitness_balance
-            + nsga_settings_.role_imbalance_blend * role_imbalance_sum
+            + nsga_settings_.role_imbalance_blend * role_imbalance_avg
             + nsga_settings_.team_spread_blend * team_spread_std;
         evaluations[ind].objectives[1] = fitness_priority + nsga_settings_.subrole_blend * subrole_penalty;
     }
